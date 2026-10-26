@@ -1,13 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { MAX_ARTWORK_BYTES, storeArtwork } from '../cache/artwork-cache.ts';
+import { ARTWORK_SUBDIR, MAX_ARTWORK_BYTES, storeArtwork } from '../cache/artwork-cache.ts';
 import {
+  type AlbumImageRow,
   type Credit,
+  getAlbumImages,
   getAlbumOfFile,
+  getArtworkCacheFile,
   type NewArtwork,
   pruneEmptyAlbums,
   removeOtherSegments,
   setAlbumArtwork,
+  setAlbumImages,
   upsertAlbum,
   upsertArtist,
   upsertArtwork,
@@ -40,13 +44,32 @@ import {
   type NamedCueSheet,
   withCueSheet,
 } from '../metadata/cue.ts';
-import { albumFolder, type CatalogRecord, splitByCue, toCatalogRecord } from '../metadata/map.ts';
+import {
+  albumFolder,
+  type CatalogRecord,
+  isDiscFolder,
+  splitByCue,
+  toCatalogRecord,
+} from '../metadata/map.ts';
+import { isScanFolder, MAX_SCAN_DEPTH, MAX_SCANS_PER_ALBUM } from '../metadata/scans.ts';
+
+/** A viewing copy of a scanned image, made by the caller's image library. */
+export interface RenderedImage {
+  readonly data: Uint8Array;
+  readonly width: number;
+  readonly height: number;
+}
 
 export interface ScanDeps {
   readonly db: CatalogDb;
   readonly reader: LibraryReader;
   /** App cache dir; extracted artwork goes in `<cacheDir>/artwork`. */
   readonly cacheDir: string;
+  /**
+   * Turns a scanned image (booklet page, back cover…) into a viewing copy
+   * for the cache. Without it, scans are not collected.
+   */
+  readonly renderScan?: (source: Uint8Array) => Promise<RenderedImage>;
 }
 
 export interface MassMissingThreshold {
@@ -71,6 +94,8 @@ export interface ScanOptions {
   readonly concurrency?: number;
   readonly signal?: AbortSignal;
   readonly onProgress?: (progress: { seen: number; currentPath: string }) => void;
+  /** Called after each album's scans are collected. */
+  readonly onScansProgress?: (progress: { albums: number; total: number }) => void;
   readonly now?: () => Date;
 }
 
@@ -79,11 +104,20 @@ export interface ScanProblem {
   readonly message: string;
 }
 
+/** What happened to scanned artwork images (not audio files). */
+export interface ImageCounters {
+  /** New or changed images given a viewing copy. */
+  readonly rendered: number;
+  readonly unchanged: number;
+  readonly failed: number;
+}
+
 export interface ScanSummary {
   readonly scanId: number | null;
   readonly status: 'completed' | 'aborted' | 'failed' | 'dry-run';
   readonly scopeSubpath: string | null;
   readonly counters: ScanCounters;
+  readonly images: ImageCounters;
   /** Whether unseen files were checked and marked missing. */
   readonly swept: boolean;
   readonly reason: string | null;
@@ -129,6 +163,7 @@ async function realScan(
   });
 
   const counters: Mutable<ScanCounters> = zeroCounters();
+  let images: ImageCounters = { rendered: 0, unchanged: 0, failed: 0 };
   const problems: ScanProblem[] = [];
   let totalBytes = 0;
   let walkComplete = true;
@@ -155,7 +190,7 @@ async function realScan(
       counters,
       ...(reason !== null && { errorMessage: reason }),
     });
-    return { scanId, status, scopeSubpath, counters, swept, reason, problems, totalBytes };
+    return { scanId, status, scopeSubpath, counters, images, swept, reason, problems, totalBytes };
   };
 
   const context: ScanContext = {
@@ -166,6 +201,8 @@ async function realScan(
     folderArt: new Map(),
     cueSheets: new Map(),
     artChecked: new Set(),
+    albumFolders: new Map(),
+    audioDirs: new Set(),
   };
   try {
     await forEachConcurrent(
@@ -182,6 +219,9 @@ async function realScan(
         counters.seen++;
         totalBytes += event.size;
         options.onProgress?.({ seen: counters.seen, currentPath: event.relPath });
+        for (let dir = path.dirname(event.relPath); dir !== '.'; dir = path.dirname(dir)) {
+          context.audioDirs.add(dir);
+        }
         await processFile(deps, context, event, counters, report);
       },
     );
@@ -191,6 +231,12 @@ async function realScan(
     return finish('failed', false, (error as Error).message);
   }
 
+  if (options.signal?.aborted) return finish('aborted', false, 'Cancelled.');
+  try {
+    images = await collectAlbumScans(deps, context, report, options);
+  } catch (error) {
+    return finish('failed', false, (error as Error).message);
+  }
   if (options.signal?.aborted) return finish('aborted', false, 'Cancelled.');
   if (scopeSubpath !== null) return finish('completed', false, null);
   if (!walkComplete) {
@@ -234,6 +280,17 @@ interface ScanContext {
   readonly cueSheets: Map<string, Promise<NamedCueSheet[]>>;
   /** Albums already checked for missing artwork during this scan. */
   readonly artChecked: Set<number>;
+  /** Album folder → albums with tracks in it, for collecting scans. */
+  readonly albumFolders: Map<string, Set<number>>;
+  /** Every folder that holds audio, directly or below. */
+  readonly audioDirs: Set<string>;
+}
+
+function noteAlbumFolder(ctx: ScanContext, relPath: string, albumId: number): void {
+  const folder = albumFolder(relPath);
+  const ids = ctx.albumFolders.get(folder) ?? new Set<number>();
+  ids.add(albumId);
+  ctx.albumFolders.set(folder, ids);
 }
 
 async function processFile(
@@ -251,8 +308,11 @@ async function processFile(
   // Incremental fast path: same size and mtime means same file; don't read it.
   if (statUnchanged && ctx.mode === 'incremental' && existing.status !== 'missing') {
     markFileSeen(db, existing.id, ctx.scanId);
-    if (existing.status === 'present')
-      await fillMissingArtwork(deps, ctx, existing.id, entry.relPath);
+    if (existing.status === 'present') {
+      const album = getAlbumOfFile(db, existing.id);
+      if (album) noteAlbumFolder(ctx, entry.relPath, album.albumId);
+      await fillMissingArtwork(deps, ctx, album, entry.relPath);
+    }
     if (existing.status === 'error') {
       counters.errors++;
       report(entry.relPath, existing.errorMessage ?? 'Previously unreadable.');
@@ -300,15 +360,17 @@ async function processFile(
     (await findFolderArt(deps, ctx, entry.relPath)) ??
     (picture ? storeArtwork(cacheDir, picture) : null);
 
-  db.transaction((tx) => {
+  const albumIds = db.transaction((tx) => {
     const file = upsertFile(tx, { ...fileBase, audioMd5, status: 'present', errorMessage: null });
     const artworkId = artwork ? upsertArtwork(tx, artwork) : null;
+    const ids: number[] = [];
     for (const record of records) {
       const albumArtistId = record.album.albumArtist
         ? upsertArtist(tx, record.album.albumArtist)
         : null;
       const { albumArtist: _, ...album } = record.album;
       const albumId = upsertAlbum(tx, { ...album, albumArtistId, artworkId });
+      ids.push(albumId);
       const credits: Credit[] = [
         ...record.artists.map((name) => ({
           artistId: upsertArtist(tx, name),
@@ -327,8 +389,10 @@ async function processFile(
       file.id,
       records.map((r) => r.track.segment),
     );
+    return ids;
   });
   ctx.wroteTracks = true;
+  for (const albumId of new Set(albumIds)) noteAlbumFolder(ctx, entry.relPath, albumId);
 
   countChange(existing, statUnchanged, counters);
 }
@@ -341,16 +405,107 @@ async function processFile(
 async function fillMissingArtwork(
   deps: ScanDeps,
   ctx: ScanContext,
-  fileId: number,
+  album: { albumId: number; artworkId: number | null } | undefined,
   relPath: string,
 ): Promise<void> {
-  const album = getAlbumOfFile(deps.db, fileId);
   if (!album || album.artworkId !== null || ctx.artChecked.has(album.albumId)) return;
   ctx.artChecked.add(album.albumId);
   const art = await findFolderArt(deps, ctx, relPath);
   if (art) {
     deps.db.transaction((tx) => setAlbumArtwork(tx, album.albumId, upsertArtwork(tx, art)));
   }
+}
+
+/**
+ * Collects each album's scanned artwork: images in its folder, its disc
+ * folders, and subfolders without audio (Artwork/, Scans/Booklet/…), each
+ * given a viewing copy in the cache. Unchanged images keep their copy. A
+ * folder shared by several albums (loose tracks) gives scans to none.
+ */
+async function collectAlbumScans(
+  deps: ScanDeps,
+  ctx: ScanContext,
+  report: (relPath: string, message: string) => void,
+  options: ScanOptions,
+): Promise<ImageCounters> {
+  const counters = { rendered: 0, unchanged: 0, failed: 0 };
+  const render = deps.renderScan;
+  if (!render) return counters;
+  const { db, reader, cacheDir } = deps;
+
+  const foldersByAlbum = new Map<number, string[]>();
+  for (const [folder, ids] of ctx.albumFolders) {
+    for (const id of ids) {
+      const list = foldersByAlbum.get(id) ?? [];
+      if (ids.size === 1) list.push(folder);
+      foldersByAlbum.set(id, list);
+    }
+  }
+  const descend = (relSubdir: string, name: string, siblings: readonly string[]) =>
+    isScanFolder(name, siblings) && (isDiscFolder(name) || !ctx.audioDirs.has(relSubdir));
+  const cached = (artworkId: number) => {
+    const file = getArtworkCacheFile(db, artworkId);
+    return file !== undefined && fs.existsSync(path.join(cacheDir, ARTWORK_SUBDIR, file));
+  };
+
+  let done = 0;
+  await forEachConcurrent(
+    toAsync([...foldersByAlbum]),
+    2,
+    options.signal,
+    async ([albumId, folders]) => {
+      const known = new Map(getAlbumImages(db, albumId).map((r) => [r.relPath, r]));
+      const rows: AlbumImageRow[] = [];
+      for (const folder of folders) {
+        const limit = MAX_SCANS_PER_ALBUM - rows.length;
+        if (limit <= 0) break;
+        const found = await reader
+          .listImages(folder, { maxDepth: MAX_SCAN_DEPTH, limit, descend })
+          .catch(() => []);
+        for (const image of found) {
+          const previous = known.get(image.relPath);
+          if (
+            previous &&
+            previous.sourceSize === image.size &&
+            previous.sourceMtimeMs === image.mtimeMs &&
+            cached(previous.artworkId)
+          ) {
+            rows.push(previous);
+            counters.unchanged++;
+            continue;
+          }
+          try {
+            const data = await reader.readImage(image.relPath, MAX_ARTWORK_BYTES);
+            if (data === null) throw new Error('Image is too large to show.');
+            const copy = await render(data);
+            const art = storeArtwork(cacheDir, { data: copy.data }, 'folder');
+            if (art === null) throw new Error('Viewing copy is not a supported image.');
+            const artworkId = db.transaction((tx) =>
+              upsertArtwork(tx, { ...art, width: copy.width, height: copy.height }),
+            );
+            rows.push({
+              relPath: image.relPath,
+              artworkId,
+              sourceSize: image.size,
+              sourceMtimeMs: image.mtimeMs,
+            });
+            counters.rendered++;
+          } catch (error) {
+            // One unreadable scan is reported and skipped.
+            counters.failed++;
+            report(image.relPath, `Scan image skipped: ${(error as Error).message}`);
+          }
+        }
+      }
+      setAlbumImages(db, albumId, rows);
+      options.onScansProgress?.({ albums: ++done, total: foldersByAlbum.size });
+    },
+  );
+  return counters;
+}
+
+async function* toAsync<T>(items: Iterable<T>): AsyncGenerator<T> {
+  yield* items;
 }
 
 /** The CUE sheet for an audio file, from the sheets in its folder. */
@@ -442,6 +597,7 @@ async function dryRun(
     status: 'dry-run',
     scopeSubpath,
     counters,
+    images: { rendered: 0, unchanged: 0, failed: 0 },
     swept: false,
     reason: null,
     problems,

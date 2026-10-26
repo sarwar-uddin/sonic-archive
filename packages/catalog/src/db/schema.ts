@@ -231,3 +231,31 @@ export const trackGenres = sqliteTable(
     index('track_genres_genre_idx').on(t.genreId),
   ],
 );
+
+/**
+ * Scanned artwork found in an album's folder (booklet pages, back, disc…),
+ * for the album's scan viewer. Each row points at a viewing copy in the
+ * artwork cache; the source image in the library is only ever read. The
+ * kind of each scan is derived from its name when read (src/metadata/scans.ts).
+ */
+export const albumImages = sqliteTable(
+  'album_images',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    albumId: integer('album_id')
+      .notNull()
+      .references(() => albums.id, { onDelete: 'cascade' }),
+    artworkId: integer('artwork_id')
+      .notNull()
+      .references(() => artwork.id),
+    /** Source image, relative to the library root. Informational only. */
+    relPath: text('rel_path').notNull(),
+    /** Size and mtime of the source when its copy was made; a change re-renders it. */
+    sourceSize: integer('source_size').notNull(),
+    sourceMtimeMs: integer('source_mtime_ms').notNull(),
+  },
+  (t) => [
+    uniqueIndex('album_images_album_path_unique').on(t.albumId, t.relPath),
+    index('album_images_artwork_idx').on(t.artworkId),
+  ],
+);

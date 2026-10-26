@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import { nameKey } from '../text/normalize.ts';
 import type { CatalogExecutor } from './database.ts';
 import {
+  albumImages,
   albums,
   artists,
   artwork,
@@ -248,4 +249,62 @@ function requireKey(name: string, label: string): string {
   const key = nameKey(name);
   if (key === '') throw new Error(`${label} name is empty.`);
   return key;
+}
+
+export type AlbumImageRow = Omit<typeof albumImages.$inferSelect, 'id' | 'albumId'>;
+
+/** The scans recorded for an album, by source path. */
+export function getAlbumImages(db: CatalogExecutor, albumId: number): AlbumImageRow[] {
+  return db
+    .select({
+      relPath: albumImages.relPath,
+      artworkId: albumImages.artworkId,
+      sourceSize: albumImages.sourceSize,
+      sourceMtimeMs: albumImages.sourceMtimeMs,
+    })
+    .from(albumImages)
+    .where(eq(albumImages.albumId, albumId))
+    .all();
+}
+
+/**
+ * Makes an album's scans exactly `images`: updates rows whose source path is
+ * known, adds new ones, and drops rows for images no longer in the folder.
+ * The cached copies stay (content-addressed; another album may share one).
+ */
+export function setAlbumImages(
+  db: CatalogExecutor,
+  albumId: number,
+  images: readonly AlbumImageRow[],
+): void {
+  db.transaction((tx) => {
+    const existing = new Map(
+      tx
+        .select({ id: albumImages.id, relPath: albumImages.relPath })
+        .from(albumImages)
+        .where(eq(albumImages.albumId, albumId))
+        .all()
+        .map((r) => [r.relPath, r.id]),
+    );
+    for (const image of images) {
+      const id = existing.get(image.relPath);
+      if (id === undefined)
+        tx.insert(albumImages)
+          .values({ ...image, albumId })
+          .run();
+      else tx.update(albumImages).set(image).where(eq(albumImages.id, id)).run();
+      existing.delete(image.relPath);
+    }
+    const stale = [...existing.values()];
+    if (stale.length > 0) tx.delete(albumImages).where(inArray(albumImages.id, stale)).run();
+  });
+}
+
+/** The cache file behind an artwork row, if the row exists. */
+export function getArtworkCacheFile(db: CatalogExecutor, artworkId: number): string | undefined {
+  return db
+    .select({ cacheFile: artwork.cacheFile })
+    .from(artwork)
+    .where(eq(artwork.id, artworkId))
+    .get()?.cacheFile;
 }

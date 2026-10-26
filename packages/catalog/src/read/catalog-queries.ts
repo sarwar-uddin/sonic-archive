@@ -31,6 +31,7 @@ import type {
 import type Database from 'better-sqlite3';
 import { toFtsQuery } from '../db/search-index.ts';
 import { editionFromPath } from '../metadata/edition.ts';
+import { classifyScan, compareScans } from '../metadata/scans.ts';
 import { nameKey } from '../text/normalize.ts';
 
 type Row = Record<string, unknown>;
@@ -290,6 +291,18 @@ export function createCatalogQueries(sqlite: Database.Database): CatalogQueries 
         [id],
       ).map((g) => ({ id: Number(g.id), name: String(g.name) })),
       discs: discs as Disc[],
+      scans: all(
+        `SELECT i.rel_path, w.id, w.width, w.height FROM album_images i
+         JOIN artwork w ON w.id = i.artwork_id WHERE i.album_id = ?`,
+        [id],
+      )
+        .sort((a, b) => compareScans(String(a.rel_path), String(b.rel_path)))
+        .map((r) => ({
+          artworkId: Number(r.id),
+          ...classifyScan(String(r.rel_path)),
+          width: nullableNumber(r.width),
+          height: nullableNumber(r.height),
+        })),
     };
   }
 

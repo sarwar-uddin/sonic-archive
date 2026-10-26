@@ -13,6 +13,7 @@ import {
   runScan,
   type ScanSummary,
 } from '@sonic-archive/catalog';
+import { renderScanCopy } from './artwork.ts';
 
 const USAGE = `Usage: sonic-archive <command> [options]
 
@@ -129,7 +130,12 @@ async function scan(args: string[]): Promise<number> {
   try {
     migrateCatalog(database);
     const summary = await runScan(
-      { db: database.db, reader: createLibraryReader(library.root), cacheDir: dirs.cacheDir },
+      {
+        db: database.db,
+        reader: createLibraryReader(library.root),
+        cacheDir: dirs.cacheDir,
+        renderScan: renderScanCopy,
+      },
       {
         mode,
         ...(values.subpath !== undefined && { subpath: values.subpath }),
@@ -137,6 +143,7 @@ async function scan(args: string[]): Promise<number> {
         allowMassMissing: values['allow-mass-missing'],
         signal: controller.signal,
         onProgress: progressPrinter(),
+        onScansProgress: scansProgressPrinter(),
       },
     );
     printSummary(summary);
@@ -158,6 +165,12 @@ function progressPrinter(): (p: { seen: number }) => void {
   };
 }
 
+function scansProgressPrinter(): (p: { albums: number; total: number }) => void {
+  if (!process.stderr.isTTY) return () => {};
+  return ({ albums, total }) =>
+    process.stderr.write(`\r\x1b[K  artwork scans: ${albums}/${total} albums…`);
+}
+
 function printSummary(s: ScanSummary): void {
   if (process.stderr.isTTY) process.stderr.write('\r\x1b[K');
   const c = s.counters;
@@ -171,6 +184,7 @@ function printSummary(s: ScanSummary): void {
     `restored   ${c.restored}`,
     `missing    ${s.swept ? c.missing : '(not checked)'}`,
     `errors     ${c.errors}`,
+    `scans      ${s.images.rendered + s.images.unchanged} artwork images (${s.images.rendered} new or changed${s.images.failed > 0 ? `, ${s.images.failed} skipped` : ''})`,
   ];
   if (s.reason) lines.push('', s.reason);
   if (s.problems.length > 0) {

@@ -84,5 +84,5 @@ export const scanListQuery = z.strictObject({
 export const idParams = z.strictObject({ id });
 
 export const artworkQuery = z.strictObject({
-  size: z.enum(['sm', 'lg']).default('lg'),
+  size: z.enum(['sm', 'lg', 'xl']).default('lg'),
 });

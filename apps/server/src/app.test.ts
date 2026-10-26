@@ -34,6 +34,7 @@ import sharp from 'sharp';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from './app.ts';
+import { renderScanCopy } from './artwork.ts';
 
 let catalog: TempCatalog;
 let lib: LibraryCopy;
@@ -46,7 +47,12 @@ beforeAll(async () => {
   lib = copyFixtureLibrary();
   cacheDir = path.join(catalog.dataDir, 'cache');
   await runScan(
-    { db: catalog.database.db, reader: createLibraryReader(lib.root), cacheDir },
+    {
+      db: catalog.database.db,
+      reader: createLibraryReader(lib.root),
+      cacheDir,
+      renderScan: renderScanCopy,
+    },
     { mode: 'incremental' },
   );
   // Serve from a read-only connection, exactly as main.ts does.
@@ -284,6 +290,31 @@ describe('GET /api/albums/:id', () => {
     expect(body.discs[0]?.tracks[1]?.span).toEqual({ startMs: 1000, endMs: 2000 });
     const sizes = new Set(body.discs.flatMap((d) => d.tracks.map((t) => t.file.size)));
     expect(body.totalBytes).toBe([...sizes].reduce((a, b) => a + b, 0));
+  });
+
+  it('lists scanned artwork in viewing order, served at reading size', async () => {
+    const body = (await api(`/api/albums/${await albumId('Format Sampler')}`)).body as AlbumDetail;
+    expect(body.scans).toEqual([
+      {
+        artworkId: expect.any(Number),
+        kind: 'front',
+        number: null,
+        label: 'Front',
+        width: 64,
+        height: 64,
+      },
+      {
+        artworkId: expect.any(Number),
+        kind: 'back',
+        number: null,
+        label: 'back',
+        width: 64,
+        height: 64,
+      },
+    ]);
+    const res = await api(`/api/artwork/${body.scans[1]?.artworkId}?size=xl`);
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('image/webp');
   });
 
   it('404s for an unknown album', async () => {

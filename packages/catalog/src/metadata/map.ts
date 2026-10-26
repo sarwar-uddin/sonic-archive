@@ -41,6 +41,11 @@ const DISC_FOLDER = /^(cd|disc|disk)[\s._-]*(\d+)/i;
 const WORD_DISC_FOLDER = /^\((one|two|three|four|five|six)\)$/i;
 const DISC_WORDS = ['one', 'two', 'three', 'four', 'five', 'six'];
 
+/** Whether a folder name is a disc folder of a multi-disc set. */
+export function isDiscFolder(name: string): boolean {
+  return discFolderNumber(name) !== null;
+}
+
 /** The disc number a folder name stands for, or null if it is not a disc folder. */
 function discFolderNumber(name: string): number | null {
   const digits = DISC_FOLDER.exec(name);

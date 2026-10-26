@@ -47,7 +47,9 @@ export { type CatalogQueries, createCatalogQueries } from './read/catalog-querie
 export { buildHealthReport, REPORT_LIMIT } from './read/health-report.ts';
 export {
   DEFAULT_MASS_MISSING,
+  type ImageCounters,
   type MassMissingThreshold,
+  type RenderedImage,
   runScan,
   type ScanOptions,
   type ScanProblem,

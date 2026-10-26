@@ -479,6 +479,121 @@ describe('single-file CD images', () => {
   });
 });
 
+describe('scanned artwork', () => {
+  let renders: string[];
+  /** Stands in for sharp: keeps the bytes (a valid JPEG/PNG), counts calls. */
+  const renderScan = async (source: Uint8Array) => {
+    renders.push(Buffer.from(source).subarray(0, 4).toString('hex'));
+    return { data: source, width: 64, height: 64 };
+  };
+  const scanWithArt = (options: Partial<ScanOptions> = {}) =>
+    runScan(
+      { db: catalog.database.db, reader, cacheDir, renderScan },
+      { mode: 'incremental', ...options },
+    );
+  const scansOf = (album: string) =>
+    query<{ rel_path: string }>(
+      `SELECT i.rel_path FROM album_images i JOIN albums a ON a.id = i.album_id
+       WHERE a.title = ? ORDER BY i.rel_path`,
+      album,
+    ).map((r) => r.rel_path);
+
+  beforeEach(() => {
+    renders = [];
+  });
+
+  it('collects images from the album folder, its art folders and disc folders', async () => {
+    const drift = path.join(lib.root, 'Drift/Double Album (1999)');
+    fs.copyFileSync(path.join(drift, 'folder.jpg'), path.join(drift, 'CD2/cd2.jpg'));
+    const summary = await scanWithArt();
+    expect(scansOf('Format Sampler')).toEqual([
+      'Cinder Collective/Format Sampler (2015)/Artwork/Front.png',
+      'Cinder Collective/Format Sampler (2015)/back.jpg',
+    ]);
+    expect(scansOf('Double Album')).toEqual([
+      'Drift/Double Album (1999)/CD2/cd2.jpg',
+      'Drift/Double Album (1999)/folder.jpg',
+    ]);
+    expect(summary.images).toEqual({ rendered: 5, unchanged: 0, failed: 0 });
+  });
+
+  it('keeps unchanged copies, and follows changed and removed images', async () => {
+    await scanWithArt();
+    expect(renders).toHaveLength(4);
+    renders = [];
+    expect((await scanWithArt()).images).toEqual({ rendered: 0, unchanged: 4, failed: 0 });
+    expect(renders).toHaveLength(0);
+
+    const album = path.join(lib.root, 'Cinder Collective/Format Sampler (2015)');
+    fs.rmSync(path.join(album, 'back.jpg'));
+    fs.copyFileSync(
+      path.join(lib.root, 'Drift/Double Album (1999)/folder.jpg'),
+      path.join(album, 'Artwork/Front.png'),
+    );
+    fs.utimesSync(path.join(album, 'Artwork/Front.png'), new Date(), new Date(2_000_000_000_000));
+    expect((await scanWithArt()).images).toMatchObject({ rendered: 1 });
+    expect(scansOf('Format Sampler')).toEqual([
+      'Cinder Collective/Format Sampler (2015)/Artwork/Front.png',
+    ]);
+  });
+
+  it("never takes images from folders holding another album's audio", async () => {
+    const outer = path.join(lib.root, 'Nest/Outer');
+    fs.mkdirSync(path.join(outer, 'Inner'), { recursive: true });
+    fs.copyFileSync(path.join(lib.root, UNTAGGED), path.join(outer, 'a.flac'));
+    fs.copyFileSync(path.join(lib.root, UNTAGGED), path.join(outer, 'Inner/b.flac'));
+    fs.copyFileSync(
+      path.join(lib.root, 'Drift/Double Album (1999)/folder.jpg'),
+      path.join(outer, 'Inner/cover.jpg'),
+    );
+    await scanWithArt();
+    expect(scansOf('Outer')).toEqual([]);
+    expect(scansOf('Inner')).toEqual(['Nest/Outer/Inner/cover.jpg']);
+  });
+
+  it('prefers a Hi-Res set over its Low-Res copy, and skips alternate scans', async () => {
+    const covers = path.join(lib.root, 'Aurora Field/Northern Lines (2001)/Covers');
+    const jpg = path.join(lib.root, 'Drift/Double Album (1999)/folder.jpg');
+    for (const dir of ['Hi-Res', 'Low-Res', 'ALT 600 dpi']) {
+      fs.mkdirSync(path.join(covers, dir), { recursive: true });
+      fs.copyFileSync(jpg, path.join(covers, dir, 'Back.jpg'));
+    }
+    await scanWithArt();
+    expect(scansOf('Northern Lines')).toEqual([
+      'Aurora Field/Northern Lines (2001)/Covers/Hi-Res/Back.jpg',
+    ]);
+  });
+
+  it('skips a scan that cannot be rendered, without failing the scan', async () => {
+    const album = path.join(lib.root, 'Aurora Field/Northern Lines (2001)');
+    fs.writeFileSync(path.join(album, 'broken.jpg'), 'not an image');
+    const summary = await runScan(
+      {
+        db: catalog.database.db,
+        reader,
+        cacheDir,
+        renderScan: async (source) => {
+          if (Buffer.from(source).toString() === 'not an image') throw new Error('bad image');
+          return { data: source, width: 1, height: 1 };
+        },
+      },
+      { mode: 'incremental' },
+    );
+    expect(summary.status).toBe('completed');
+    expect(summary.images.failed).toBe(1);
+    expect(summary.problems).toContainEqual({
+      relPath: 'Aurora Field/Northern Lines (2001)/broken.jpg',
+      message: 'Scan image skipped: bad image',
+    });
+  });
+
+  it('collects nothing without a renderer', async () => {
+    const summary = await scan();
+    expect(summary.images).toEqual({ rendered: 0, unchanged: 0, failed: 0 });
+    expect(one('SELECT count(*) AS n FROM album_images')).toEqual({ n: 0 });
+  });
+});
+
 describe('rescanning', () => {
   it('is idempotent: identical rows and ids', async () => {
     await scan();

@@ -2,12 +2,29 @@ import fs from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
 
-/** Longest edge, in pixels, of each served size. */
-export const ARTWORK_SIZES = { sm: 400, lg: 1200 } as const;
+/** Longest edge, in pixels, of each served size. `xl` is for reading booklets. */
+export const ARTWORK_SIZES = { sm: 400, lg: 1200, xl: 2000 } as const;
 export type ArtworkSize = keyof typeof ARTWORK_SIZES;
 
 /** Refuse decompression bombs: no source image above 120 megapixels. */
 const MAX_INPUT_PIXELS = 120_000_000;
+
+/**
+ * Makes the cached viewing copy of a scanned image (booklet page, back
+ * cover…) for the scanner: WebP, at most 2000 px on the long edge. At CD
+ * booklet size (12 cm) that is about 420 dpi, enough to read liner notes,
+ * at a fraction of the original scan's size.
+ */
+export async function renderScanCopy(
+  source: Uint8Array,
+): Promise<{ data: Uint8Array; width: number; height: number }> {
+  const { data, info } = await sharp(source, { limitInputPixels: MAX_INPUT_PIXELS })
+    .rotate()
+    .resize(ARTWORK_SIZES.xl, ARTWORK_SIZES.xl, { fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: 86 })
+    .toBuffer({ resolveWithObject: true });
+  return { data, width: info.width, height: info.height };
+}
 
 /**
  * Serves covers as WebP at fixed sizes, generated on first request from the
@@ -22,6 +39,8 @@ export function createArtworkRenderer(artworkDir: string) {
   const inFlight = new Map<string, Promise<string>>();
 
   async function render(cacheFile: string, size: ArtworkSize): Promise<string> {
+    // Scan copies are already WebP at the `xl` size: serve them as they are.
+    if (size === 'xl' && cacheFile.endsWith('.webp')) return path.join(artworkDir, cacheFile);
     const sha = cacheFile.slice(0, cacheFile.indexOf('.'));
     const target = path.join(derivedDir, `${sha}-${size}.webp`);
     if (fs.existsSync(target)) return target;
@@ -39,7 +58,7 @@ export function createArtworkRenderer(artworkDir: string) {
             fit: 'inside',
             withoutEnlargement: true,
           })
-          .webp({ quality: size === 'sm' ? 78 : 84 })
+          .webp({ quality: size === 'sm' ? 78 : size === 'lg' ? 84 : 86 })
           .toFile(temp);
         await fs.promises.rename(temp, target);
         return target;

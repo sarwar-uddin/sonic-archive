@@ -78,12 +78,38 @@ export interface Disc {
   readonly tracks: readonly TrackSummary[];
 }
 
+/** What a scanned image shows, in the order you would leaf through a case. */
+export type ScanKind =
+  | 'front'
+  | 'booklet'
+  | 'inside'
+  | 'back'
+  | 'tray'
+  | 'disc'
+  | 'obi'
+  | 'extra'
+  | 'spectrogram';
+
+/** One scanned image from the album's folder (served via /api/artwork/:id). */
+export interface AlbumScan {
+  readonly artworkId: number;
+  readonly kind: ScanKind;
+  /** Page or item number from the file name ("Booklet 07" → 7). */
+  readonly number: number | null;
+  /** The file name without extension. */
+  readonly label: string;
+  readonly width: number | null;
+  readonly height: number | null;
+}
+
 export interface AlbumDetail extends AlbumSummary {
   readonly musicbrainzAlbumId: string | null;
   readonly totalDiscs: number | null;
   readonly genres: readonly { readonly id: number; readonly name: string }[];
   readonly totalBytes: number;
   readonly discs: readonly Disc[];
+  /** Scanned artwork in viewing order; empty when the folder has none. */
+  readonly scans: readonly AlbumScan[];
 }
 
 export interface ArtistSummary extends ArtistRef {

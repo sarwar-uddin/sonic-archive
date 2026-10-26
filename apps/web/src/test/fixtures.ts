@@ -46,6 +46,7 @@ export const albumSummary: AlbumSummary = {
 
 export const albumDetail: AlbumDetail = {
   ...albumSummary,
+  scans: [],
   musicbrainzAlbumId: null,
   totalDiscs: 2,
   genres: [{ id: 3, name: 'Chamber' }],
