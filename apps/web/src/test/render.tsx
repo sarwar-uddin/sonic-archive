@@ -19,16 +19,27 @@ export function renderApp(path: string) {
   return { ...utils, router };
 }
 
-type Responder = (url: URL) => unknown;
+type Responder = (url: URL, init?: RequestInit) => unknown;
+
+export const LIBRARY_READY = {
+  root: '/music',
+  source: 'file',
+  watching: true,
+  state: 'idle',
+  progress: null,
+  error: null,
+};
 
 /**
  * Replaces fetch with a router over `/api/*` paths. Unmatched requests fail
  * the test loudly instead of hanging. Returns the mock to inspect calls.
  */
-export function mockApi(routesByPath: Record<string, Responder | unknown>) {
-  const mock = vi.fn(async (input: RequestInfo | URL) => {
+export function mockApi(given: Record<string, Responder | unknown>) {
+  // Every page asks for the library status; by default a folder is chosen.
+  const routesByPath: Record<string, Responder | unknown> = { library: LIBRARY_READY, ...given };
+  const mock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), 'http://127.0.0.1');
-    const key = url.pathname.replace(/^\/api\//, '');
+    const key = `${init?.method && init.method !== 'GET' ? `${init.method} ` : ''}${url.pathname.replace(/^\/api\//, '')}`;
     if (!(key in routesByPath)) {
       return new Response(
         JSON.stringify({ error: { code: 'NOT_FOUND', message: `No mock for ${key}` } }),
@@ -38,7 +49,8 @@ export function mockApi(routesByPath: Record<string, Responder | unknown>) {
       );
     }
     const entry = routesByPath[key];
-    const body = typeof entry === 'function' ? (entry as Responder)(url) : entry;
+    const body = typeof entry === 'function' ? (entry as Responder)(url, init) : entry;
+    if (body instanceof Response) return body;
     return new Response(JSON.stringify(body), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },

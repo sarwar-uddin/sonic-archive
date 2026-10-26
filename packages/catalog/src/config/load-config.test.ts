@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { CONFIG_FILE_NAME, loadConfig } from './load-config.ts';
+import { CONFIG_FILE_NAME, loadConfig, saveConfig } from './load-config.ts';
 
 let sandbox: string;
 let home: string;
@@ -35,10 +35,22 @@ describe('loadConfig', () => {
 
   it('reads the root from the config file', () => {
     writeConfigFile(JSON.stringify({ libraryRoot: music }));
-    expect(loadConfig({ env: {}, homeDir: home }).library).toEqual({
-      status: 'configured',
-      root: music,
+    const config = loadConfig({ env: {}, homeDir: home });
+    expect(config.library).toEqual({ status: 'configured', root: music, source: 'file' });
+    expect(config.settings).toEqual({ watch: true });
+  });
+
+  it('saves changes made in the app, keeping other settings', () => {
+    writeConfigFile(JSON.stringify({ libraryRoot: music }));
+    const configDir = path.join(home, '.config/sonic-archive');
+    saveConfig(configDir, { watch: false });
+    expect(loadConfig({ env: {}, homeDir: home })).toMatchObject({
+      library: { root: music },
+      settings: { watch: false },
     });
+    // Nothing but config.json is left behind (no temporary file).
+    expect(fs.readdirSync(configDir)).toEqual(['config.json']);
+    expect(() => saveConfig(configDir, { watch: 'yes' } as never)).toThrow();
   });
 
   it('lets SONIC_LIBRARY_ROOT override the config file', () => {
@@ -46,7 +58,7 @@ describe('loadConfig', () => {
     fs.mkdirSync(other);
     writeConfigFile(JSON.stringify({ libraryRoot: music }));
     const config = loadConfig({ env: { SONIC_LIBRARY_ROOT: other }, homeDir: home });
-    expect(config.library).toEqual({ status: 'configured', root: other });
+    expect(config.library).toEqual({ status: 'configured', root: other, source: 'env' });
   });
 
   it('treats a blank SONIC_LIBRARY_ROOT as unset', () => {

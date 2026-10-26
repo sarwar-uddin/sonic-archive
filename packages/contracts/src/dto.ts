@@ -246,7 +246,15 @@ export interface SearchResults {
 
 export interface ApiError {
   readonly error: {
-    readonly code: 'BAD_REQUEST' | 'NOT_FOUND' | 'FORBIDDEN' | 'METHOD_NOT_ALLOWED' | 'INTERNAL';
+    readonly code:
+      | 'BAD_REQUEST'
+      | 'NOT_FOUND'
+      | 'FORBIDDEN'
+      | 'METHOD_NOT_ALLOWED'
+      | 'UNSUPPORTED_MEDIA_TYPE'
+      | 'INVALID_FOLDER'
+      | 'BUSY'
+      | 'INTERNAL';
     readonly message: string;
     readonly issues?: readonly { readonly path: string; readonly message: string }[];
   };
@@ -336,4 +344,28 @@ export interface Statistics {
   }[];
   /** Releases per rip verdict; `none` means no rip log. */
   readonly rips: readonly { readonly verdict: RipVerdict | 'none'; readonly releases: number }[];
+}
+
+/** The music folder and what the app is doing with it. */
+export interface LibraryStatus {
+  /** The music folder, or null before one is chosen. */
+  readonly root: string | null;
+  /** `env`: set by SONIC_LIBRARY_ROOT, so the app cannot change it. */
+  readonly source: 'env' | 'file' | null;
+  /** Following changes in the folder while the app runs. */
+  readonly watching: boolean;
+  readonly state: 'unconfigured' | 'idle' | 'scanning' | 'analyzing';
+  /** While scanning: files seen; while analyzing: files measured of total. */
+  readonly progress: { readonly done: number; readonly total: number | null } | null;
+  /** The last problem (an unreachable folder, a failed scan), if any. */
+  readonly error: string | null;
+}
+
+/** One folder's subfolders, for choosing the music folder. Names only; no files. */
+export interface FolderListing {
+  readonly path: string;
+  readonly parent: string | null;
+  readonly folders: readonly { readonly name: string; readonly path: string }[];
+  /** Likely places for music: the home folder, ~/Music, mounted drives. */
+  readonly places: readonly { readonly name: string; readonly path: string }[];
 }

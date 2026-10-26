@@ -1,6 +1,8 @@
 /**
- * Typed client for the read-only API. Response types come from
- * @sonic-archive/contracts, the same definitions the server produces.
+ * Typed client for the API. Response types come from @sonic-archive/contracts,
+ * the same definitions the server produces. Almost everything is a read;
+ * the few changes (choosing the music folder, rescans, settings) go through
+ * `send`, which adds the session token the server requires.
  */
 import type {
   AlbumDetail,
@@ -9,8 +11,10 @@ import type {
   ArtistDetail,
   ArtistSummary,
   Facets,
+  FolderListing,
   Health,
   HealthReport,
+  LibraryStatus,
   Page,
   RipLogText,
   ScanRecord,
@@ -48,6 +52,42 @@ async function get<T>(path: string, params?: Params, signal?: AbortSignal): Prom
     headers: { Accept: 'application/json' },
     ...(signal && { signal }),
   });
+  return readJson<T>(response);
+}
+
+let token: Promise<string> | null = null;
+const sessionToken = () => {
+  token ??= get<{ token: string }>('session').then((s) => s.token);
+  return token;
+};
+
+/**
+ * A change request: JSON, with the session token. If the server restarted
+ * (new token), the token is fetched again and the request retried once.
+ */
+async function send<T>(
+  method: 'PUT' | 'POST',
+  path: string,
+  body: unknown,
+  retry = true,
+): Promise<T> {
+  const response = await fetch(apiUrl(path), {
+    method,
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'X-Sonic-Token': await sessionToken(),
+    },
+    body: JSON.stringify(body),
+  });
+  if (response.status === 403 && retry) {
+    token = null;
+    return send<T>(method, path, body, false);
+  }
+  return readJson<T>(response);
+}
+
+async function readJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
     let message = `Request failed (${response.status}).`;
     try {
@@ -72,6 +112,12 @@ export const api = {
   health: (signal?: AbortSignal) => get<Health>('health', undefined, signal),
   stats: (signal?: AbortSignal) => get<Stats>('stats', undefined, signal),
   statistics: (signal?: AbortSignal) => get<Statistics>('statistics', undefined, signal),
+  library: (signal?: AbortSignal) => get<LibraryStatus>('library', undefined, signal),
+  folders: (path: string | undefined, signal?: AbortSignal) =>
+    get<FolderListing>('folders', { path }, signal),
+  chooseFolder: (path: string) => send<LibraryStatus>('PUT', 'library', { path }),
+  rescan: (full: boolean) => send<LibraryStatus>('POST', 'library/scan', { full }),
+  setWatching: (watch: boolean) => send<LibraryStatus>('PUT', 'library/settings', { watch }),
   facets: (signal?: AbortSignal) => get<Facets>('facets', undefined, signal),
   albums: (params: Params, signal?: AbortSignal) =>
     get<Page<AlbumSummary>>('albums', params, signal),

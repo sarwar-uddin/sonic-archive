@@ -95,3 +95,21 @@ export const audioQuery = z.strictObject({
 export const artworkQuery = z.strictObject({
   size: z.enum(['sm', 'lg', 'xl']).default('lg'),
 });
+
+/** Choosing the music folder: an absolute path, validated server-side. */
+export const chooseFolderBody = z.strictObject({
+  path: z.string().min(1).max(4096),
+});
+
+export const rescanBody = z.strictObject({
+  full: z.boolean().default(false),
+});
+
+export const settingsBody = z.strictObject({
+  watch: z.boolean(),
+});
+
+/** Listing folders for the picker; defaults to the home folder. */
+export const folderQuery = z.strictObject({
+  path: z.string().min(1).max(4096).optional(),
+});

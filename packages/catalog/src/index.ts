@@ -6,15 +6,21 @@ export { ARTWORK_SUBDIR, storeArtwork } from './cache/artwork-cache.ts';
 export { ConfigError, type ConfigErrorCode } from './config/errors.ts';
 export {
   type AppConfig,
+  type AppSettings,
   CONFIG_FILE_NAME,
   type LibraryConfig,
   type LoadConfigOptions,
   loadConfig,
+  rootValidationContext,
+  saveConfig,
 } from './config/load-config.ts';
 export { isSameOrInside, pathsOverlap } from './config/path-utils.ts';
 export { type AppDirs, type Env, resolveAppDirs } from './config/paths.ts';
 export { assertInsideTestSandbox, isTestRuntime } from './config/sandbox.ts';
-export { type RootValidationContext, validateLibraryRoot } from './config/validate-root.ts';
+export {
+  type RootValidationContext,
+  validateLibraryRoot,
+} from './config/validate-root.ts';
 export * from './db/catalog-repository.ts';
 export {
   type CatalogDatabase,
@@ -37,6 +43,7 @@ export {
   type MigrateResult,
   migrateCatalog,
 } from './db/migrate.ts';
+export { resetCatalog } from './db/reset.ts';
 export * as schema from './db/schema.ts';
 export { rebuildSearchIndex, toFtsQuery } from './db/search-index.ts';
 export {

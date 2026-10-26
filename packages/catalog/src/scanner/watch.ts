@@ -99,6 +99,11 @@ export function createDebouncedRunner(task: () => Promise<void>, quietMs: number
   };
   return {
     schedule,
+    /** Runs as soon as possible (an explicit "rescan"), still never twice at once. */
+    now() {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(run, 0);
+    },
     /** Resolves once nothing is pending or running (for tests and shutdown). */
     async idle() {
       while (timer || running) {

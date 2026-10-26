@@ -3,8 +3,9 @@ import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { api } from '../lib/api.ts';
 import { formatBytes } from '../lib/format.ts';
-import { useLibraryEvents } from '../lib/use-library-events.ts';
+import { useLibraryEvents, useLibraryStatus } from '../lib/use-library-events.ts';
 import { PlayerProvider, usePlayer } from '../lib/use-player.tsx';
+import { SetupPage } from '../pages/SetupPage.tsx';
 import { CommandPalette, isTyping } from './CommandPalette.tsx';
 import styles from './Layout.module.css';
 import { PlayerBar } from './PlayerBar.tsx';
@@ -15,6 +16,7 @@ const NAV = [
   { to: '/tracks', label: 'Tracks', end: false },
   { to: '/health', label: 'Health', end: false },
   { to: '/ledger', label: 'Ledger', end: false },
+  { to: '/settings', label: 'Settings', end: false },
 ];
 
 export function Layout() {
@@ -28,6 +30,10 @@ export function Layout() {
 function Shell() {
   const [playerState, player] = usePlayer();
   const notice = useLibraryEvents();
+  const library = useLibraryStatus();
+  // No music folder yet: every page becomes the setup screen.
+  const needsSetup = library.data?.root === null;
+  const working = library.data?.state === 'scanning' || library.data?.state === 'analyzing';
   const { data: stats } = useQuery({
     queryKey: ['stats'],
     queryFn: ({ signal }) => api.stats(signal),
@@ -71,16 +77,16 @@ function Shell() {
             <span className={styles.label} aria-hidden="true" />
             <span className="display">Sonic Archive</span>
           </Link>
-          {stats && (
+          {stats && !needsSetup && (
             <p className={`mono ${styles.plate}`}>
               <span>{stats.tracks.toLocaleString('en')} tracks</span>
               <span>{stats.artists.toLocaleString('en')} artists</span>
               <span>{formatBytes(stats.totalBytes)}</span>
             </p>
           )}
-          <SearchBox onPalette={() => setPalette(true)} />
+          {!needsSetup && <SearchBox onPalette={() => setPalette(true)} />}
         </div>
-        <nav aria-label="Sections" className={styles.nav}>
+        <nav aria-label="Sections" className={styles.nav} hidden={needsSetup}>
           {NAV.map((item) => (
             <NavLink
               key={item.to}
@@ -94,9 +100,17 @@ function Shell() {
             </NavLink>
           ))}
         </nav>
+        {working && library.data && (
+          <p className={styles.progress} role="status" aria-label="Library progress">
+            <span className={styles.progressBar} aria-hidden="true" />
+            {library.data.state === 'scanning'
+              ? `Scanning your music… ${library.data.progress?.done ?? 0} files`
+              : `Measuring dynamic range… ${library.data.progress?.done ?? 0} of ${library.data.progress?.total ?? '?'} files`}
+          </p>
+        )}
       </header>
       <main id="main" ref={mainRef} tabIndex={-1} className={styles.main}>
-        <Outlet />
+        {needsSetup ? <SetupPage /> : <Outlet />}
       </main>
       {palette && <CommandPalette onClose={() => setPalette(false)} />}
       <PlayerBar />

@@ -13,12 +13,27 @@ The library is treated as strictly read-only; see [docs/safety.md](docs/safety.m
 ```sh
 mise install
 pnpm install
+pnpm start      # build and run: open http://127.0.0.1:4317
+```
+
+On first run the app asks where your music is: browse to the folder (or
+paste its path) and choose it. It is scanned in the background, then kept
+up to date while the app runs; covers, booklet scans, rip logs and dynamic
+range follow. Settings lets you change the folder, rescan, or stop watching.
+Your music files are only ever read ([docs/safety.md](docs/safety.md)), and
+the app answers only on this computer.
+
+`ffmpeg` on your `PATH` enables playback of formats browsers cannot decode
+(ALAC, APE, WavPack, DSD, AIFF) and dynamic range measurement.
+
+For development:
+
+```sh
 pnpm check      # typecheck + lint + tests
-pnpm paths      # show where config, database and cache live
-pnpm db:migrate # create or upgrade the catalog database (backs up first)
-pnpm scan       # index the library: read-only, needs --confirm (see docs/safety.md)
 pnpm dev        # API on 127.0.0.1:4317 + web app on http://127.0.0.1:5173
-pnpm start      # production: build the web app and serve everything on http://127.0.0.1:4317
+pnpm paths      # show where config, database and cache live
+pnpm scan       # scan from the command line (needs --confirm)
+pnpm analyze    # measure dynamic range from the command line (needs --confirm)
 ```
 
 ## Layout
@@ -27,7 +42,7 @@ pnpm start      # production: build the web app and serve everything on http://1
 | -------------------- | ---------------------------------------------------------------------- |
 | `packages/catalog`   | Domain core: config, scanner, database, read queries (no HTTP)         |
 | `packages/contracts` | API query schemas and response types, shared by server and web         |
-| `apps/server`        | CLI and the read-only Express API                                      |
+| `apps/server`        | CLI and the Express API (reads, plus three guarded settings actions)   |
 | `apps/web`           | React frontend (Vite)                                                  |
 | `docs/adr`           | Architecture decision records                                          |
 | `test-fixtures`      | Synthetic audio library for tests ([details](test-fixtures/README.md)) |
@@ -60,7 +75,7 @@ All endpoints are `GET`, return JSON, and address resources by numeric id.
 
 ## Status
 
-Milestones **M0–M15** are complete, plus a collection-led redesign: the
+Milestones **M0–M16** are complete, plus a collection-led redesign: the
 library has been scanned in full (read-only; verified unchanged afterwards).
 Covers come from folder scans (JPEG/PNG/TIFF) and are served as WebP
 thumbnails. Single-file CD images are split into their tracks by their CUE
@@ -86,11 +101,14 @@ Albums play in the browser: files as stored, CD images gapless as one
 stream, other formats (ALAC, APE, DSD…) converted to FLAC while playing
 ([ADR 0009](docs/adr/0009-playback.md)).
 
-`pnpm start:watch` keeps the catalog in step with the library: changes are
-picked up within seconds, and open pages refresh themselves.
+The catalog follows the music folder while the app runs: changes are picked
+up within seconds, and open pages refresh themselves.
 
 `pnpm analyze --confirm` measures each track's dynamic range (the DR meter
 used by the Dynamic Range Database), shown per album, per pressing and per
-decade on the Ledger; `start:watch` measures new tracks after each scan.
+decade on the Ledger; new tracks are measured after each scan.
 
-Next: choosing the music folder inside the app, then a spine shelf view.
+Anyone can install it: the music folder is chosen inside the app
+([ADR 0010](docs/adr/0010-app-for-everyone.md)).
+
+Next: a spine shelf view.

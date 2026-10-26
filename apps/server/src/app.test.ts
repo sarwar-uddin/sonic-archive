@@ -35,7 +35,7 @@ import sharp from 'sharp';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { analyzeLibrary } from './analyze.ts';
-import { createApp } from './app.ts';
+import { createApp, fixedLibrary } from './app.ts';
 import { renderScanCopy } from './artwork.ts';
 import { createTranscoder } from './audio.ts';
 
@@ -65,8 +65,7 @@ beforeAll(async () => {
     queries: createCatalogQueries(reader.sqlite),
     healthReport: () => buildHealthReport(reader.sqlite),
     artworkDir: path.join(cacheDir, ARTWORK_SUBDIR),
-    libraryRoot: lib.root,
-    library: createLibraryReader(lib.root),
+    library: fixedLibrary(lib.root, createLibraryReader(lib.root)),
     transcoder: createTranscoder(),
   });
 });
@@ -487,7 +486,7 @@ describe('GET /api/artwork/:id', () => {
       queries: createCatalogQueries(reader.sqlite),
       healthReport: () => buildHealthReport(reader.sqlite),
       artworkDir: dotCache,
-      libraryRoot: lib.root,
+      library: fixedLibrary(lib.root),
     });
     const album = (await api(`/api/albums/${await albumId('Northern Lines')}`)).body as AlbumDetail;
     const res = await request(dotApp).get(`/api/artwork/${album.artworkId}?size=sm`);
@@ -631,13 +630,12 @@ describe('GET /api/files/:id/audio', () => {
       queries: createCatalogQueries(reader.sqlite),
       healthReport: () => buildHealthReport(reader.sqlite),
       artworkDir: path.join(cacheDir, ARTWORK_SUBDIR),
-      libraryRoot: lib.root,
-      library: {
+      library: fixedLibrary(lib.root, {
         audioFile: async () => ({ absolute: '/nowhere', size: 1 }),
         readAudioRange: async () => {
           throw new Error('unused');
         },
-      },
+      }),
       transcoder: { stream: () => null },
     });
     const coda = await fileOf('Coda');
@@ -647,15 +645,14 @@ describe('GET /api/files/:id/audio', () => {
       queries: createCatalogQueries(reader.sqlite),
       healthReport: () => buildHealthReport(reader.sqlite),
       artworkDir: path.join(cacheDir, ARTWORK_SUBDIR),
-      libraryRoot: lib.root,
-      library: {
+      library: fixedLibrary(lib.root, {
         audioFile: async () => {
           throw new Error('ENOENT');
         },
         readAudioRange: async () => {
           throw new Error('unused');
         },
-      },
+      }),
     });
     expect((await request(gone).get(`/api/files/${coda.id}/audio`)).status).toBe(404);
   });
@@ -668,7 +665,115 @@ describe('GET /api/files/:id/audio', () => {
   });
 });
 
+describe('changing things: write protection', () => {
+  const TOKEN = 'test-token-0123456789';
+  const changes: string[] = [];
+  const writable = createApp({
+    queries: createCatalogQueries(createTempCatalog().database.sqlite),
+    healthReport: () => ({}) as HealthReport,
+    artworkDir: '/nonexistent',
+    sessionToken: TOKEN,
+    library: {
+      ...fixedLibrary('/music'),
+      setRoot: async (p) => {
+        changes.push(`root ${p}`);
+        return fixedLibrary(p).status();
+      },
+      rescan: (full) => {
+        changes.push(`rescan ${full}`);
+        return fixedLibrary('/music').status();
+      },
+      setWatching: (on) => {
+        changes.push(`watch ${on}`);
+        return fixedLibrary('/music').status();
+      },
+    },
+  });
+  const put = (url: string) => request(writable).put(url).set('Host', '127.0.0.1:4317');
+
+  it('accepts a change from the app: same origin, token, JSON', async () => {
+    const res = await put('/api/library')
+      .set('Origin', 'http://127.0.0.1:4317')
+      .set('X-Sonic-Token', TOKEN)
+      .send({ path: '/srv/music' });
+    expect(res.status).toBe(200);
+    expect(res.body.root).toBe('/srv/music');
+    expect(changes).toContain('root /srv/music');
+  });
+
+  it.each([
+    ['no Origin', {}, 403],
+    ['another site', { Origin: 'http://evil.example' }, 403],
+    ['the same host on another port', { Origin: 'http://127.0.0.1:9999' }, 403],
+    ['no token', { Origin: 'http://127.0.0.1:4317', 'X-Sonic-Token': '' }, 403],
+    ['a wrong token', { Origin: 'http://127.0.0.1:4317', 'X-Sonic-Token': 'x'.repeat(21) }, 403],
+  ])('refuses a change with %s', async (_, headers, status) => {
+    const before = changes.length;
+    const res = await put('/api/library')
+      .set(headers as Record<string, string>)
+      .send({ path: '/x' });
+    expect(res.status).toBe(status);
+    expect(changes).toHaveLength(before);
+  });
+
+  it('refuses form posts and unknown body fields', async () => {
+    const headers = { Origin: 'http://127.0.0.1:4317', 'X-Sonic-Token': TOKEN };
+    const form = await put('/api/library').set(headers).type('form').send('path=/x');
+    expect(form.status).toBe(415);
+    const extra = await put('/api/library').set(headers).send({ path: '/x', admin: true });
+    expect(extra.status).toBe(400);
+  });
+
+  it('still refuses every other change request', async () => {
+    const headers = { Origin: 'http://127.0.0.1:4317', 'X-Sonic-Token': TOKEN };
+    expect((await request(writable).delete('/api/library').set(headers)).status).toBe(405);
+    expect((await request(writable).post('/api/albums/1').set(headers).send({})).status).toBe(405);
+  });
+
+  it('gives the page its token, and lists folders', async () => {
+    expect((await request(writable).get('/api/session')).body).toEqual({ token: TOKEN });
+    const res = await request(writable).get(`/api/folders?path=${encodeURIComponent(lib.root)}`);
+    expect(res.status).toBe(200);
+    expect(res.body.folders.map((f: { name: string }) => f.name)).toContain('Aurora Field');
+    expect((await request(writable).get('/api/folders?path=relative')).body.error.code).toBe(
+      'INVALID_FOLDER',
+    );
+  });
+});
+
 describe('GET /api/events', () => {
+  it('says "no scan yet" on a new install', async () => {
+    const fresh = createTempCatalog();
+    const freshReader = openCatalogDatabase(fresh.dataDir, { readonly: true });
+    const server = createApp({
+      queries: createCatalogQueries(freshReader.sqlite),
+      healthReport: () => buildHealthReport(freshReader.sqlite),
+      artworkDir: '/nonexistent',
+      library: fixedLibrary(null),
+    }).listen(0, '127.0.0.1');
+    await new Promise((r) => server.once('listening', r));
+    const controller = new AbortController();
+    try {
+      const { port } = server.address() as { port: number };
+      const res = await fetch(`http://127.0.0.1:${port}/api/events`, { signal: controller.signal });
+      const reader = res.body?.getReader();
+      let text = '';
+      while (reader && !/event: scan\ndata: null/.test(text)) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        text += new TextDecoder().decode(value);
+      }
+      expect(text).toMatch(/event: scan\ndata: null/);
+      expect(text).toMatch(/event: library\ndata: \{"root":null,/);
+    } finally {
+      controller.abort();
+      server.closeAllConnections();
+      server.close();
+      freshReader.close();
+      fresh.cleanup();
+    }
+  });
+
   it('announces the last scan, then each newly finished one', async () => {
     // Its own catalog: this test adds a scan.
     const own = createTempCatalog();
@@ -684,7 +789,7 @@ describe('GET /api/events', () => {
       queries: createCatalogQueries(ownReader.sqlite),
       healthReport: () => buildHealthReport(ownReader.sqlite),
       artworkDir: path.join(ownCache, ARTWORK_SUBDIR),
-      libraryRoot: lib.root,
+      library: fixedLibrary(lib.root),
       eventsPollMs: 30,
     });
     const server = events.listen(0, '127.0.0.1');
@@ -705,6 +810,7 @@ describe('GET /api/events', () => {
           text += decoder.decode(value);
         }
       };
+      await next(/event: library\ndata: \{"root":/);
       await next(/event: scan\ndata: \{"id":1,/);
       // Another scan finishes (here: the CLI's, on the write connection).
       await scanOwn();
@@ -770,7 +876,7 @@ describe('missing files', () => {
         queries: createCatalogQueries(other.database.sqlite),
         healthReport: () => buildHealthReport(other.database.sqlite),
         artworkDir: path.join(other.dataDir, 'cache', ARTWORK_SUBDIR),
-        libraryRoot: copy.root,
+        library: fixedLibrary(copy.root),
       });
       const albums = (await request(missingApp).get('/api/albums')).body as Page<AlbumSummary>;
       expect(titles(albums)).not.toContain('Untagged');
@@ -795,7 +901,7 @@ describe('production web app', () => {
         queries: createCatalogQueries(reader.sqlite),
         healthReport: () => buildHealthReport(reader.sqlite),
         artworkDir: path.join(cacheDir, ARTWORK_SUBDIR),
-        libraryRoot: lib.root,
+        library: fixedLibrary(lib.root),
         webDist,
       });
       const page = await request(webApp).get('/albums/3');

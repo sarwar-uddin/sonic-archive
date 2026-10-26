@@ -7,7 +7,9 @@ export type ConfigErrorCode =
   | 'ROOT_NOT_FOUND'
   | 'ROOT_NOT_DIRECTORY'
   | 'ROOT_OVERLAPS_APP_DIR'
-  | 'ROOT_OUTSIDE_TEST_SANDBOX';
+  | 'ROOT_OUTSIDE_TEST_SANDBOX'
+  | 'ROOT_SET_BY_ENVIRONMENT'
+  | 'ROOT_NOT_CONFIGURED';
 
 /**
  * Raised when configuration is unsafe or unusable. The application refuses

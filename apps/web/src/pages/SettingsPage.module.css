@@ -1,0 +1,65 @@
+.folder {
+  font-size: 15px;
+  overflow-wrap: anywhere;
+  margin-bottom: 12px;
+}
+
+.note {
+  display: block;
+  margin: 4px 0 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.change {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.button {
+  align-self: flex-start;
+  padding: 7px 16px;
+  border: 1px solid var(--rule-strong);
+  background: none;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  border-color: var(--paper);
+}
+
+.button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.toggle {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  max-width: 640px;
+  cursor: pointer;
+}
+
+.toggle input {
+  margin-top: 4px;
+  accent-color: var(--accent);
+}
+
+.state {
+  margin: 16px 0 6px;
+  font-size: 14px;
+}
+
+.problem {
+  color: var(--warn);
+  font-size: 13.5px;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}

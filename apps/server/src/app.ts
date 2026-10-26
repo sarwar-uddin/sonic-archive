@@ -1,23 +1,30 @@
+import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { CatalogQueries, LibraryReader } from '@sonic-archive/catalog';
+import { type CatalogQueries, ConfigError, type LibraryReader } from '@sonic-archive/catalog';
 import {
   type ApiError,
   albumListQuery,
   artistListQuery,
   artworkQuery,
   audioQuery,
+  chooseFolderBody,
+  folderQuery,
   type Health,
   type HealthReport,
   idParams,
+  type LibraryStatus,
+  rescanBody,
   scanListQuery,
   searchQuery,
+  settingsBody,
   trackListQuery,
 } from '@sonic-archive/contracts';
 import express, { type ErrorRequestHandler, type Request, type Response } from 'express';
 import { ZodError, type z } from 'zod';
 import { createArtworkRenderer } from './artwork.ts';
 import { parseRange, type Transcoder } from './audio.ts';
+import { FolderError, listFolders } from './folders.ts';
 import {
   apiContentSecurityPolicy,
   hostGuard,
@@ -25,7 +32,40 @@ import {
   readOnlyMethods,
   securityHeaders,
   webContentSecurityPolicy,
+  writeGuard,
 } from './security.ts';
+
+/**
+ * The music folder as the HTTP layer sees it. Read-only parts are required;
+ * the actions are optional (a fixed folder offers none).
+ */
+export interface LibraryAccess {
+  status(): LibraryStatus;
+  /** Read access for playback; null before a folder is chosen. */
+  reader(): Pick<LibraryReader, 'audioFile' | 'readAudioRange'> | null;
+  subscribe?(listener: (status: LibraryStatus) => void): () => void;
+  setRoot?(path: string): Promise<LibraryStatus>;
+  rescan?(full: boolean): LibraryStatus;
+  setWatching?(on: boolean): LibraryStatus;
+}
+
+/** A folder that cannot be changed from the app (tests; SONIC_LIBRARY_ROOT). */
+export function fixedLibrary(
+  root: string | null,
+  reader: Pick<LibraryReader, 'audioFile' | 'readAudioRange'> | null = null,
+): LibraryAccess {
+  return {
+    status: () => ({
+      root,
+      source: root === null ? null : 'env',
+      watching: false,
+      state: root === null ? 'unconfigured' : 'idle',
+      progress: null,
+      error: null,
+    }),
+    reader: () => reader,
+  };
+}
 
 export interface AppDeps {
   readonly queries: CatalogQueries;
@@ -33,10 +73,12 @@ export interface AppDeps {
   readonly healthReport: () => HealthReport;
   /** `<cacheDir>/artwork`: the only directory files are served from. */
   readonly artworkDir: string;
-  /** Canonical library root, or null when unconfigured. Only ever stat'ed. */
-  readonly libraryRoot: string | null;
-  /** Read-only access to audio for playback; null when no library is configured. */
-  readonly library?: Pick<LibraryReader, 'audioFile' | 'readAudioRange'> | null;
+  /** The music folder: status, read access for playback, and (optionally) actions. */
+  readonly library: LibraryAccess;
+  /** Secret for write requests (random per start unless given, e.g. in tests). */
+  readonly sessionToken?: string;
+  /** Where the folder picker starts. */
+  readonly homeDir?: string;
   /** Converts formats browsers cannot play; without it they are not playable. */
   readonly transcoder?: Transcoder;
   /** How often the events stream checks for a finished scan. */
@@ -61,6 +103,8 @@ export function createApp(deps: AppDeps): express.Express {
   app.use(hostGuard(deps.allowedHostnames ?? LOOPBACK_HOSTNAMES));
   app.use(securityHeaders);
   app.use(readOnlyMethods);
+  const sessionToken = deps.sessionToken ?? randomBytes(32).toString('hex');
+  app.use(writeGuard(sessionToken, deps.allowedHostnames ?? LOOPBACK_HOSTNAMES));
 
   const api = express.Router();
   api.use(apiContentSecurityPolicy);
@@ -68,7 +112,10 @@ export function createApp(deps: AppDeps): express.Express {
   api.get('/health', (_req, res) => {
     const body: Health = {
       status: 'ok',
-      library: { configured: deps.libraryRoot !== null, available: isDirectory(deps.libraryRoot) },
+      library: {
+        configured: deps.library.status().root !== null,
+        available: isDirectory(deps.library.status().root),
+      },
       lastScan: queries.lastScan(),
     };
     res.json(body);
@@ -99,11 +146,12 @@ export function createApp(deps: AppDeps): express.Express {
   api.get('/files/:id/audio', async (req, res, next) => {
     const file = found(queries.getAudioFile(parse(idParams, req.params).id));
     const { start } = parse(audioQuery, req.query);
-    if (!deps.library) throw new NotFound();
+    const library = deps.library.reader();
+    if (!library) throw new NotFound();
     let size: number;
     let absolute: string;
     try {
-      ({ size, absolute } = await deps.library.audioFile(file.relPath));
+      ({ size, absolute } = await library.audioFile(file.relPath));
     } catch {
       throw new NotFound();
     }
@@ -137,10 +185,48 @@ export function createApp(deps: AppDeps): express.Express {
       res.end();
       return;
     }
-    const stream = await deps.library.readAudioRange(file.relPath, from, to);
+    const stream = await library.readAudioRange(file.relPath, from, to);
     stream.on('error', (error) => (res.headersSent ? res.destroy(error) : next(error)));
     res.on('close', () => stream.destroy());
     stream.pipe(res);
+  });
+
+  // The app's own page reads this token and sends it with every change
+  // request; other websites cannot read it (no CORS headers are sent).
+  api.get('/session', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ token: sessionToken });
+  });
+
+  api.get('/library', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(deps.library.status());
+  });
+
+  // Folder names for the music folder picker; no files, no recursion.
+  api.get('/folders', (req, res) => {
+    const { path: folder } = parse(folderQuery, req.query);
+    res.json(listFolders(folder, deps.homeDir));
+  });
+
+  const body = express.json({ limit: '8kb' });
+
+  api.put('/library', body, async (req, res) => {
+    if (!deps.library.setRoot) throw new NotFound();
+    const { path: folder } = parse(chooseFolderBody, req.body);
+    res.json(await deps.library.setRoot(folder));
+  });
+
+  api.post('/library/scan', body, (req, res) => {
+    if (!deps.library.rescan) throw new NotFound();
+    const { full } = parse(rescanBody, req.body);
+    res.json(deps.library.rescan(full));
+  });
+
+  api.put('/library/settings', body, (req, res) => {
+    if (!deps.library.setWatching) throw new NotFound();
+    const { watch } = parse(settingsBody, req.body);
+    res.json(deps.library.setWatching(watch));
   });
 
   // Server-sent events: tells open pages when a scan has finished, so they
@@ -157,7 +243,11 @@ export function createApp(deps: AppDeps): express.Express {
     const check = () => {
       const scan = queries.lastScan();
       const key = scan && scan.status !== 'running' ? `${scan.id}:${scan.finishedAt}` : null;
-      if (scan && key !== null && key !== last) {
+      if (last === null && scan === null) {
+        // No scan yet (a new install): say so, so the first one is news.
+        res.write('event: scan\ndata: null\n\n');
+        last = 'none';
+      } else if (scan && key !== null && key !== last) {
         res.write(`event: scan\ndata: ${JSON.stringify(scan)}\n\n`);
         last = key;
         quietTicks = 0;
@@ -168,7 +258,15 @@ export function createApp(deps: AppDeps): express.Express {
     };
     check();
     const timer = setInterval(check, deps.eventsPollMs ?? 2000);
-    req.on('close', () => clearInterval(timer));
+    // Library status (scanning progress, folder changes) as it happens.
+    const sendStatus = (status: LibraryStatus) =>
+      res.write(`event: library\ndata: ${JSON.stringify(status)}\n\n`);
+    sendStatus(deps.library.status());
+    const unsubscribe = deps.library.subscribe?.(sendStatus);
+    req.on('close', () => {
+      clearInterval(timer);
+      unsubscribe?.();
+    });
   });
 
   api.get('/statistics', (_req, res) => {
@@ -276,6 +374,10 @@ const errorHandler: ErrorRequestHandler = (error, _req: Request, res: Response, 
         })),
       },
     };
+  } else if (error instanceof ConfigError || error instanceof FolderError) {
+    // Why a folder was refused: written for people ("not a directory", …).
+    status = 400;
+    body = { error: { code: 'INVALID_FOLDER', message: error.message } };
   } else if (error instanceof NotFound) {
     status = 404;
     body = { error: { code: 'NOT_FOUND', message: 'Not found.' } };

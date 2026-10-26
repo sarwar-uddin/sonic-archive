@@ -4,7 +4,6 @@ import {
   ARTWORK_SUBDIR,
   buildHealthReport,
   createCatalogQueries,
-  createLibraryReader,
   loadConfig,
   migrateCatalog,
   openCatalogDatabase,
@@ -12,7 +11,7 @@ import {
 import { createApp } from './app.ts';
 import { renderScanCopy } from './artwork.ts';
 import { createTranscoder } from './audio.ts';
-import { startLiveLibrary } from './live.ts';
+import { createLibraryService } from './library-service.ts';
 
 /** Never configurable: the server only ever listens on loopback (docs/safety.md, #6). */
 const HOST = '127.0.0.1';
@@ -20,61 +19,53 @@ const DEFAULT_PORT = 4317;
 
 const port = parsePort(process.env.SONIC_PORT);
 const webDist = process.env.SONIC_WEB_DIST;
-const { dirs, library } = loadConfig({ env: process.env, homeDir: os.homedir() });
+const homeDir = os.homedir();
+const { dirs, library, settings } = loadConfig({ env: process.env, homeDir });
 
-// Create or upgrade the schema with a read-write connection, then serve
-// from a read-only one, so no request can modify the catalog.
+// Create or upgrade the schema with a read-write connection that is kept
+// for scanning only. Requests are served from a read-only connection, so no
+// request handler can modify the catalog.
 const writer = openCatalogDatabase(dirs.dataDir);
-try {
-  const { applied, backupFile } = migrateCatalog(writer);
-  if (applied > 0)
-    console.log(`applied ${applied} migration(s)${backupFile ? `; backup ${backupFile}` : ''}`);
-} finally {
-  writer.close();
-}
+const { applied, backupFile } = migrateCatalog(writer);
+if (applied > 0)
+  console.log(`applied ${applied} migration(s)${backupFile ? `; backup ${backupFile}` : ''}`);
 const database = openCatalogDatabase(dirs.dataDir, { readonly: true });
+
+// The music folder: chosen in the app (or config.json / SONIC_LIBRARY_ROOT),
+// scanned when the app starts and, if watching is on, whenever it changes.
+const libraryService = createLibraryService({
+  env: process.env,
+  homeDir,
+  dirs,
+  initial: library,
+  settings,
+  database: writer,
+  renderScan: renderScanCopy,
+  analyze: true,
+});
 
 const app = createApp({
   queries: createCatalogQueries(database.sqlite),
   healthReport: () => buildHealthReport(database.sqlite),
   artworkDir: path.join(dirs.cacheDir, ARTWORK_SUBDIR),
-  libraryRoot: library.status === 'configured' ? library.root : null,
-  // Playback reads library files through the same read-only reader the
-  // scanner uses (docs/safety.md).
-  library: library.status === 'configured' ? createLibraryReader(library.root) : null,
+  library: libraryService,
+  homeDir,
   transcoder: createTranscoder(),
   ...(webDist !== undefined && { webDist: path.resolve(webDist) }),
 });
 
-// `--watch` (pnpm start:watch): follow changes in the library as they happen.
-const watch = process.argv.includes('--watch');
-let live: ReturnType<typeof startLiveLibrary> | null = null;
-let liveDb: ReturnType<typeof openCatalogDatabase> | null = null;
-if (watch && library.status === 'configured') {
-  liveDb = openCatalogDatabase(dirs.dataDir);
-  live = startLiveLibrary({
-    db: liveDb.db,
-    reader: createLibraryReader(library.root),
-    cacheDir: dirs.cacheDir,
-    renderScan: renderScanCopy,
-    analyze: true,
-  });
-} else if (watch) {
-  console.log('--watch ignored: no library is configured.');
-}
-
 const server = app.listen(port, HOST, () => {
-  console.log(`Sonic Archive API on http://${HOST}:${port}`);
+  console.log(`Sonic Archive on http://${HOST}:${port}`);
   if (library.status === 'unconfigured')
-    console.log('No library configured yet (see docs/safety.md).');
+    console.log('No music folder yet: open the app to choose one.');
 });
 
 const shutdown = () => {
-  live?.close();
   // Open event streams would keep the server from closing.
   server.closeAllConnections();
-  server.close(() => {
-    liveDb?.close();
+  server.close(async () => {
+    await libraryService.close();
+    writer.close();
     database.close();
     process.exit(0);
   });

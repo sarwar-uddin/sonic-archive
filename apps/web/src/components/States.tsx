@@ -1,5 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
-import { api } from '../lib/api.ts';
+import { Link } from 'react-router';
+import { useLibraryStatus } from '../lib/use-library-events.ts';
 import styles from './States.module.css';
 
 export function Loading({ label = 'Loading' }: { readonly label?: string }) {
@@ -36,35 +36,32 @@ export function ErrorMessage({
 }
 
 /**
- * Shown when the catalog has no tracks: explains how to point the app at a
- * library and run a first, scoped scan.
+ * Shown when the catalog has no tracks: either the first scan is still
+ * running, or the chosen folder holds no playable music.
  */
 export function EmptyLibrary() {
-  const { data: health } = useQuery({
-    queryKey: ['health'],
-    queryFn: ({ signal }) => api.health(signal),
-  });
-  const configured = health?.library.configured ?? false;
+  const library = useLibraryStatus();
+  const scanning = library.data?.state === 'scanning' || library.data?.state === 'analyzing';
   return (
     <section className={styles.empty} aria-labelledby="empty-title">
       <p className="kicker">The shelves are empty</p>
-      <h1 id="empty-title">Nothing catalogued yet.</h1>
-      {configured ? (
-        <p>
-          A library is configured but has not been scanned. Run a sample scan of one folder first:
-        </p>
+      {scanning ? (
+        <>
+          <h1 id="empty-title">Reading your music…</h1>
+          <p>Albums appear here as soon as the first scan finishes.</p>
+        </>
       ) : (
-        <p>
-          Point Sonic Archive at your music in <code>~/.config/sonic-archive/config.json</code>,
-          then run a sample scan of one folder:
-        </p>
+        <>
+          <h1 id="empty-title">No music found yet.</h1>
+          <p>
+            Nothing playable was found in <code>{library.data?.root ?? 'the music folder'}</code>.
+            Check the folder in <Link to="/settings">Settings</Link>, or rescan there after adding
+            music.
+          </p>
+        </>
       )}
-      <pre className={styles.code}>
-        {configured ? '' : '{ "libraryRoot": "/absolute/path/to/Music" }\n\n'}
-        pnpm scan --confirm --subpath "Artist/Album"
-      </pre>
       <p className={styles.hint}>
-        Scans only read your files. Nothing in the library is ever changed.
+        Sonic Archive only reads your files. Nothing in your music folder is ever changed.
       </p>
     </section>
   );

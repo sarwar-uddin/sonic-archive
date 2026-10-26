@@ -8,6 +8,7 @@ import { LedgerPage } from './pages/LedgerPage.tsx';
 import { LibraryPage } from './pages/LibraryPage.tsx';
 import { NotFoundPage, RouteError } from './pages/NotFoundPage.tsx';
 import { SearchPage } from './pages/SearchPage.tsx';
+import { SettingsPage } from './pages/SettingsPage.tsx';
 import { TracksPage } from './pages/TracksPage.tsx';
 
 export const routes: RouteObject[] = [
@@ -23,6 +24,7 @@ export const routes: RouteObject[] = [
       { path: 'search', element: <SearchPage /> },
       { path: 'health', element: <HealthPage /> },
       { path: 'ledger', element: <LedgerPage /> },
+      { path: 'settings', element: <SettingsPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },

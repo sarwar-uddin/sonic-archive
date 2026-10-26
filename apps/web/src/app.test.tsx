@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { groupByInitial } from './pages/ArtistsPage.tsx';
 import { albumDetail, albumSummary, stats } from './test/fixtures.ts';
-import { mockApi, renderApp } from './test/render.tsx';
+import { LIBRARY_READY, mockApi, renderApp } from './test/render.tsx';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -271,18 +271,108 @@ describe('library page', () => {
     expect(router.state.location.search).toBe('');
   });
 
-  it('explains how to get started when nothing is catalogued', async () => {
+  it('says the first scan is running, or that the folder holds no music', async () => {
     mockApi({
       albums: page([]),
       facets,
       stats: { ...stats, albums: 0, tracks: 0 },
-      health: { status: 'ok', library: { configured: false, available: false }, lastScan: null },
+      library: { ...LIBRARY_READY, state: 'scanning', progress: { done: 12, total: null } },
     });
     renderApp('/');
-    expect(
-      await screen.findByRole('heading', { name: 'Nothing catalogued yet.' }),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/pnpm scan --confirm --subpath/)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Reading your music…' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Library progress' })).toHaveTextContent(
+      'Scanning your music… 12 files',
+    );
+  });
+});
+
+describe('choosing the music folder', () => {
+  const NO_FOLDER = { ...LIBRARY_READY, root: null, source: null, state: 'unconfigured' };
+  const listing = (path: string) => ({
+    path,
+    parent: path === '/home/you' ? '/home' : '/home/you',
+    folders:
+      path === '/home/you'
+        ? [
+            { name: 'Documents', path: '/home/you/Documents' },
+            { name: 'Music', path: '/home/you/Music' },
+          ]
+        : [],
+    places: [{ name: 'Home', path: '/home/you' }],
+  });
+
+  it('asks for a folder on first run, then opens the collection', async () => {
+    let chosen: unknown = null;
+    let token: string | null = null;
+    mockApi({
+      stats,
+      albums: page([albumSummary]),
+      facets,
+      library: () => (chosen ? { ...LIBRARY_READY, root: '/home/you/Music' } : NO_FOLDER),
+      session: { token: 'abc' },
+      folders: (url: URL) => listing(url.searchParams.get('path') ?? '/home/you'),
+      'PUT library': (_url: URL, init?: RequestInit) => {
+        chosen = JSON.parse(String(init?.body));
+        token = new Headers(init?.headers).get('X-Sonic-Token');
+        return { ...LIBRARY_READY, root: '/home/you/Music' };
+      },
+    });
+    renderApp('/');
+    expect(await screen.findByRole('heading', { name: /Where is your/ })).toBeInTheDocument();
+    const folders = within(await screen.findByRole('list', { name: 'Folders' }));
+    await userEvent.click(folders.getByRole('button', { name: /Music/ }));
+    expect(await screen.findByText('/home/you/Music')).toBeInTheDocument();
+    expect(await screen.findByText('No folders inside.')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Use this folder' }));
+    await waitFor(() => expect(chosen).toEqual({ path: '/home/you/Music' }));
+    expect(token).toBe('abc');
+    expect(await screen.findByRole('heading', { level: 1, name: /Releases/ })).toBeInTheDocument();
+  });
+
+  it('explains why a folder was refused', async () => {
+    mockApi({
+      library: NO_FOLDER,
+      session: { token: 'abc' },
+      folders: (url: URL) => listing(url.searchParams.get('path') ?? '/home/you'),
+      'PUT library': () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              code: 'INVALID_FOLDER',
+              message: 'Library root /home/you is the home directory or contains it.',
+            },
+          }),
+          { status: 400 },
+        ),
+    });
+    renderApp('/');
+    await screen.findByRole('list', { name: 'Folders' });
+    await userEvent.click(screen.getByRole('button', { name: 'Use this folder' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('is the home directory');
+  });
+
+  it('settings: watch toggle and rescans send their requests', async () => {
+    const sent: string[] = [];
+    mockApi({
+      stats,
+      session: { token: 'abc' },
+      'PUT library/settings': (_url: URL, init?: RequestInit) => {
+        sent.push(`settings ${init?.body}`);
+        return { ...LIBRARY_READY, watching: false };
+      },
+      'POST library/scan': (_url: URL, init?: RequestInit) => {
+        sent.push(`scan ${init?.body}`);
+        return { ...LIBRARY_READY, state: 'scanning', progress: { done: 0, total: null } };
+      },
+    });
+    renderApp('/settings');
+    expect(await screen.findByText('/music')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('checkbox', { name: /Watch the folder/ }));
+    await waitFor(() => expect(sent).toContain('settings {"watch":false}'));
+    expect(screen.getByRole('checkbox', { name: /Watch the folder/ })).not.toBeChecked();
+    await userEvent.click(screen.getByRole('button', { name: 'Re-read every file' }));
+    await waitFor(() => expect(sent).toContain('scan {"full":true}'));
   });
 });
 
@@ -325,7 +415,7 @@ describe('live library', () => {
         sources.push(this);
       }
       close() {}
-      emit(scan: object) {
+      emit(scan: object | null) {
         this.dispatchEvent(new MessageEvent('scan', { data: JSON.stringify(scan) }));
       }
     }
@@ -348,6 +438,30 @@ describe('live library', () => {
       'Library updated: 2 added, 1 updated',
     );
     await waitFor(() => expect(statsCalls()).toBeGreaterThan(before));
+  });
+  it('treats the first scan of a new install as news', async () => {
+    const sources: { emit: (scan: object | null) => void }[] = [];
+    vi.stubGlobal(
+      'EventSource',
+      class extends EventTarget {
+        constructor() {
+          super();
+          sources.push(this as unknown as { emit: (scan: object | null) => void });
+        }
+        close() {}
+        emit(scan: object | null) {
+          this.dispatchEvent(new MessageEvent('scan', { data: JSON.stringify(scan) }));
+        }
+      },
+    );
+    mockApi({ stats, albums: page([albumSummary]), facets });
+    renderApp('/');
+    await screen.findByRole('heading', { level: 1 });
+    act(() => sources[0]?.emit(null));
+    act(() => sources[0]?.emit({ id: 1, added: 18, updated: 0, restored: 0, missing: 0 }));
+    expect(screen.getByRole('status', { name: 'Library updates' })).toHaveTextContent(
+      'Library updated: 18 added',
+    );
   });
 });
 

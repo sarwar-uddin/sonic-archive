@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import type { ApiError } from '@sonic-archive/contracts';
 import type { RequestHandler } from 'express';
 
@@ -22,15 +23,73 @@ export function hostGuard(allowed: ReadonlySet<string> = LOOPBACK_HOSTNAMES): Re
   };
 }
 
-/** The API is read-only: anything but GET/HEAD is refused before routing. */
+/**
+ * The few actions that change anything: choosing the music folder, starting
+ * a rescan, and settings. None of them can write to the music folder.
+ */
+export const WRITE_ROUTES: ReadonlySet<string> = new Set([
+  'PUT /api/library',
+  'POST /api/library/scan',
+  'PUT /api/library/settings',
+]);
+
+/**
+ * Everything but GET/HEAD is refused before routing, except WRITE_ROUTES,
+ * which must also prove they come from the app's own page (`writeGuard`).
+ */
 export const readOnlyMethods: RequestHandler = (req, res, next) => {
   if (req.method === 'GET' || req.method === 'HEAD') return next();
+  if (WRITE_ROUTES.has(`${req.method} ${req.path}`)) return next();
   res.setHeader('Allow', 'GET, HEAD');
   const body: ApiError = {
-    error: { code: 'METHOD_NOT_ALLOWED', message: 'This API is read-only.' },
+    error: { code: 'METHOD_NOT_ALLOWED', message: 'Only reading is allowed here.' },
   };
   res.status(405).json(body);
 };
+
+/**
+ * Protects WRITE_ROUTES from other websites (cross-site request forgery).
+ * A request must
+ * - carry an `Origin` that is this server itself (browsers always send it
+ *   on these requests, and pages cannot forge it);
+ * - carry the session token, which only the app's own page can read from
+ *   `/api/session` (no CORS headers are ever sent, so other sites cannot);
+ * - be JSON, which other sites cannot send without a preflight we never grant.
+ */
+export function writeGuard(
+  token: string,
+  allowed: ReadonlySet<string> = LOOPBACK_HOSTNAMES,
+): RequestHandler {
+  const expected = Buffer.from(token);
+  return (req, res, next) => {
+    if (req.method === 'GET' || req.method === 'HEAD') return next();
+    const refuse = (status: number, code: ApiError['error']['code'], message: string) => {
+      const body: ApiError = { error: { code, message } };
+      res.status(status).json(body);
+    };
+    const origin = req.headers.origin;
+    let sameOrigin = false;
+    try {
+      const url = origin ? new URL(origin) : null;
+      sameOrigin =
+        url !== null &&
+        url.protocol === 'http:' &&
+        allowed.has(url.hostname === '::1' ? '[::1]' : url.hostname) &&
+        url.host === req.headers.host;
+    } catch {
+      sameOrigin = false;
+    }
+    if (!sameOrigin) return refuse(403, 'FORBIDDEN', 'Requests must come from the app itself.');
+    const given = Buffer.from(String(req.headers['x-sonic-token'] ?? ''));
+    if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
+      return refuse(403, 'FORBIDDEN', 'Missing or wrong session token.');
+    }
+    if (!req.is('application/json')) {
+      return refuse(415, 'UNSUPPORTED_MEDIA_TYPE', 'Send JSON.');
+    }
+    next();
+  };
+}
 
 /** Conservative headers for every response. No CORS headers are ever sent. */
 export const securityHeaders: RequestHandler = (_req, res, next) => {

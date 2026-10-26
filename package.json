@@ -22,7 +22,7 @@
     "dev": "pnpm --parallel --filter @sonic-archive/server --filter @sonic-archive/web dev",
     "build": "pnpm --filter @sonic-archive/web build",
     "start": "pnpm build && SONIC_WEB_DIST=apps/web/dist node apps/server/src/main.ts",
-    "start:watch": "pnpm build && SONIC_WEB_DIST=apps/web/dist node apps/server/src/main.ts --watch"
+    "start:watch": "pnpm start"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.3",
