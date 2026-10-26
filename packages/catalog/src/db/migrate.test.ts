@@ -65,6 +65,7 @@ describe('migrateCatalog', () => {
     const result = migrateCatalog(database);
     expect(result).toEqual({ applied: 4, backupFile: null });
     expect(tableNames(database.sqlite)).toEqual([
+      'album_images',
       'albums',
       'artists',
       'artwork',
