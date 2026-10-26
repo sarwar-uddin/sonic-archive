@@ -83,3 +83,10 @@
 .note {
   color: var(--muted);
 }
+
+/* Two charts side by side on wide screens. */
+.chartGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  column-gap: clamp(32px, 5vw, 72px);
+}

@@ -56,3 +56,28 @@ function mentions(folder: string, title: string): boolean {
   const needle = squash(title);
   return needle !== '' && squash(folder).includes(needle);
 }
+
+const COUNTRIES: readonly [string, RegExp][] = [
+  ['Japan', /\b(japan|japanese|jp|jpn)\b/i],
+  ['UK', /\b(uk|england|britain)\b/i],
+  ['USA', /\b(USA|US)\b/],
+  ['Germany', /\b(germany|german|w\. germany)\b/i],
+  ['Europe', /\b(eu|europe)\b/i],
+  ['Netherlands', /\b(netherlands|holland)\b/i],
+  ['France', /\bfrance\b/i],
+  ['Italy', /\bitaly\b/i],
+  ['Poland', /\bpoland\b/i],
+  ['Canada', /\bcanada\b/i],
+  ['Australia', /\baustralia\b/i],
+  ['Korea', /\bkorea\b/i],
+  ['Russia', /\brussia\b/i],
+];
+
+/**
+ * Countries named in pressing details: ["1991 Japan TECP-23893"] → ["Japan"],
+ * ["1st UK"] → ["UK"]. "US" must be upper case, so "us" in a word is not a country.
+ */
+export function pressingCountries(edition: readonly string[]): string[] {
+  const text = edition.join(' · ');
+  return COUNTRIES.filter(([, pattern]) => pattern.test(text)).map(([name]) => name);
+}

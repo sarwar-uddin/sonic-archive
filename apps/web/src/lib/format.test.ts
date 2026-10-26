@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { niceTicks } from '../components/Charts.tsx';
 import { apiUrl } from './api.ts';
 import {
   formatBytes,
@@ -87,5 +88,16 @@ describe('apiUrl', () => {
       '/api/albums?q=sigur+r%C3%B3s&page=2',
     );
     expect(apiUrl('stats')).toBe('/api/stats');
+  });
+});
+
+describe('niceTicks', () => {
+  it.each([
+    [47, [0, 20, 40, 60]],
+    [7, [0, 2, 4, 6, 8]],
+    [1, [0, 0.5, 1]],
+    [0, [0]],
+  ])('%d → %j', (max, ticks) => {
+    expect(niceTicks(max)).toEqual(ticks);
   });
 });

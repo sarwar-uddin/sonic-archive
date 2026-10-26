@@ -26,6 +26,7 @@ import type {
   RipVerdict,
   ScanRecord,
   SearchResults,
+  Statistics,
   Stats,
   TrackListItem,
   TrackListQuery,
@@ -33,7 +34,7 @@ import type {
 } from '@sonic-archive/contracts';
 import type Database from 'better-sqlite3';
 import { toFtsQuery } from '../db/search-index.ts';
-import { editionFromPath } from '../metadata/edition.ts';
+import { editionFromPath, pressingCountries } from '../metadata/edition.ts';
 import { albumRipVerdict, logDisc, parseRipLog } from '../metadata/rip-log.ts';
 import { classifyScan, compareScans } from '../metadata/scans.ts';
 import { workKey } from '../metadata/work.ts';
@@ -106,6 +107,7 @@ export interface CatalogQueries {
   getArtist(id: number): ArtistDetail | null;
   facets(): Facets;
   stats(): Stats;
+  statistics(): Statistics;
   search(q: string): SearchResults;
   listScans(limit: number): ScanRecord[];
   getScan(id: number): ScanRecord | null;
@@ -629,6 +631,57 @@ export function createCatalogQueries(sqlite: Database.Database): CatalogQueries 
     };
   }
 
+  /** Charts for the ledger, over releases only: loose tracks would skew per-album counts. */
+  function statistics(): Statistics {
+    const releases = all(
+      `WITH ${ALBUM_STATS_CTE}
+       SELECT a.id, a.title, a.year, s.sample_path FROM albums a
+       JOIN album_stats s ON s.album_id = a.id WHERE ${IS_RELEASE_SQL}`,
+    );
+    const count = <K>(keys: K[]) => {
+      const counts = new Map<K, number>();
+      for (const key of keys) counts.set(key, (counts.get(key) ?? 0) + 1);
+      return counts;
+    };
+    const decades = count(
+      releases.filter((r) => r.year !== null).map((r) => Math.floor(Number(r.year) / 10) * 10),
+    );
+    const origins = count(
+      releases.flatMap((r) =>
+        pressingCountries(editionFromPath(String(r.sample_path), String(r.title))),
+      ),
+    );
+    const verdicts = ripVerdicts();
+    const rips = count(releases.map((r) => verdicts.get(Number(r.id)) ?? ('none' as const)));
+    const ids = JSON.stringify(releases.map((r) => Number(r.id)));
+    return {
+      releases: releases.length,
+      decades: [...decades]
+        .sort(([a], [b]) => a - b)
+        .map(([decade, n]) => ({ decade, releases: n })),
+      undated: releases.filter((r) => r.year === null).length,
+      origins: [...origins]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([country, n]) => ({ country, releases: n })),
+      genres: all(
+        `SELECT g.id, g.name, count(DISTINCT t.album_id) AS n FROM genres g
+         JOIN track_genres tg ON tg.genre_id = g.id JOIN tracks t ON t.id = tg.track_id
+         WHERE t.album_id IN (SELECT value FROM json_each(?))
+         GROUP BY g.id ORDER BY n DESC, sort_key(g.name) LIMIT 10`,
+        [ids],
+      ).map((r) => ({ id: Number(r.id), name: String(r.name), releases: Number(r.n) })),
+      artists: all(
+        `SELECT ar.id, ar.name, count(*) AS n FROM albums a JOIN artists ar ON ar.id = a.album_artist_id
+         WHERE a.id IN (SELECT value FROM json_each(?))
+         GROUP BY ar.id ORDER BY n DESC, sort_key(ar.name) LIMIT 10`,
+        [ids],
+      ).map((r) => ({ id: Number(r.id), name: String(r.name), releases: Number(r.n) })),
+      rips: (['verified', 'clean', 'differs', 'problems', 'unknown', 'none'] as const)
+        .map((verdict) => ({ verdict, releases: rips.get(verdict) ?? 0 }))
+        .filter((r) => r.releases > 0),
+    };
+  }
+
   function search(q: string): SearchResults {
     const albumFilter = albumFilters({ q });
     const albums =
@@ -663,6 +716,7 @@ export function createCatalogQueries(sqlite: Database.Database): CatalogQueries 
     getArtist,
     facets,
     stats,
+    statistics,
     search,
     listScans: (limit) => all(`${SCAN_SQL} ORDER BY id DESC LIMIT ?`, [limit]).map(toScanRecord),
     getScan: (id) => {

@@ -300,3 +300,25 @@ export interface HealthReport {
     readonly notes: readonly string[];
   }>;
 }
+
+/** Collection statistics for the ledger. Counts are of releases (see ALBUM_KINDS). */
+export interface Statistics {
+  readonly releases: number;
+  readonly decades: readonly { readonly decade: number; readonly releases: number }[];
+  /** Releases without a year. */
+  readonly undated: number;
+  /** Countries named in pressing details ("1991 Japan …", "[1st UK]"), most first. */
+  readonly origins: readonly { readonly country: string; readonly releases: number }[];
+  readonly genres: readonly {
+    readonly id: number;
+    readonly name: string;
+    readonly releases: number;
+  }[];
+  readonly artists: readonly {
+    readonly id: number;
+    readonly name: string;
+    readonly releases: number;
+  }[];
+  /** Releases per rip verdict; `none` means no rip log. */
+  readonly rips: readonly { readonly verdict: RipVerdict | 'none'; readonly releases: number }[];
+}

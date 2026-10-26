@@ -22,6 +22,9 @@
   --obi: #efe9dc;
   --warn: #e0a841;
   --verified: #7fc48a;
+  /* Charts: one series hue, validated against the ink surface (dataviz). */
+  --series-1: #3987e5;
+  --status-none: #3a3833;
 
   --font-sans: "Archivo Variable", "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;

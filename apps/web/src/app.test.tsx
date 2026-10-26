@@ -373,6 +373,52 @@ describe('groupByInitial', () => {
   });
 });
 
+describe('ledger charts', () => {
+  it('draws decades, origins, genres, artists and rip verdicts', async () => {
+    mockApi({
+      stats,
+      health: { status: 'ok', library: { configured: true, available: true }, lastScan: null },
+      scans: [],
+      statistics: {
+        releases: 10,
+        decades: [
+          { decade: 1970, releases: 3 },
+          { decade: 1980, releases: 7 },
+        ],
+        undated: 1,
+        origins: [{ country: 'Japan', releases: 4 }],
+        genres: [{ id: 5, name: 'Rock', releases: 6 }],
+        artists: [{ id: 2, name: 'Pink Floyd', releases: 5 }],
+        rips: [
+          { verdict: 'verified', releases: 6 },
+          { verdict: 'none', releases: 4 },
+        ],
+      },
+    });
+    renderApp('/ledger');
+    const decades = within(await screen.findByRole('list', { name: 'Releases by decade' }));
+    expect(decades.getByRole('img', { name: '1980s: 7 releases' })).toBeInTheDocument();
+    expect(screen.getByText('1 without a year are left out', { exact: false })).toBeInTheDocument();
+    // The table view lists every value.
+    expect(screen.getByText('Show as a table')).toBeInTheDocument();
+
+    const origins = within(screen.getByRole('list', { name: 'Releases by country of pressing' }));
+    expect(origins.getByText('Japan')).toBeInTheDocument();
+    expect(origins.getByText('40%', { exact: false })).toBeInTheDocument();
+
+    const genres = within(screen.getByRole('list', { name: 'Releases by genre' }));
+    expect(genres.getByRole('link', { name: 'Rock: 6 releases' })).toHaveAttribute(
+      'href',
+      '/?genre=5',
+    );
+
+    const rips = within(screen.getByRole('figure', { name: 'Releases by rip verdict' }));
+    expect(rips.getByRole('img', { name: 'Verified: 6 releases' })).toBeInTheDocument();
+    expect(rips.getByText('No rip log')).toBeInTheDocument();
+    expect(rips.getByText('4 · 40%')).toBeInTheDocument();
+  });
+});
+
 describe('health page', () => {
   it('summarizes problems and lists duplicate groups', async () => {
     const empty = { total: 0, items: [] };

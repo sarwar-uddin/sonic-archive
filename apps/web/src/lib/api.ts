@@ -15,6 +15,7 @@ import type {
   RipLogText,
   ScanRecord,
   SearchResults,
+  Statistics,
   Stats,
   TrackListItem,
 } from '@sonic-archive/contracts';
@@ -70,6 +71,7 @@ export function artworkUrl(id: number, size: 'sm' | 'lg' | 'xl' = 'sm'): string 
 export const api = {
   health: (signal?: AbortSignal) => get<Health>('health', undefined, signal),
   stats: (signal?: AbortSignal) => get<Stats>('stats', undefined, signal),
+  statistics: (signal?: AbortSignal) => get<Statistics>('statistics', undefined, signal),
   facets: (signal?: AbortSignal) => get<Facets>('facets', undefined, signal),
   albums: (params: Params, signal?: AbortSignal) =>
     get<Page<AlbumSummary>>('albums', params, signal),

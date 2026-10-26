@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { editionFromPath } from './edition.ts';
+import { editionFromPath, pressingCountries } from './edition.ts';
 
 describe('editionFromPath', () => {
   // Folder names from the collection this was built for.
@@ -54,5 +54,19 @@ describe('editionFromPath', () => {
     ['Radiohead/Disc 1/song.flac', 'Creep', []],
   ])('names a pressing folder as a whole: %s', (relPath, title, expected) => {
     expect(editionFromPath(relPath, title)).toEqual(expected);
+  });
+});
+
+describe('pressingCountries', () => {
+  it.each([
+    [['1991 Japan TECP-23893 Teichiku'], ['Japan']],
+    [['CDP 7 46034 2', '1st UK'], ['UK']],
+    [['1959, 1983, CBS-Sony-Japan'], ['Japan']],
+    [['LLLPLLPLP01, UK, Europe & US'], ['UK', 'USA', 'Europe']],
+    [['Roadrunner Records, RR 8957-2, Netherlands'], ['Netherlands']],
+    [['Remastered by us'], []],
+    [[], []],
+  ])('%j → %j', (edition, expected) => {
+    expect(pressingCountries(edition)).toEqual(expected);
   });
 });

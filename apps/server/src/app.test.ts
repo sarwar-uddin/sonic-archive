@@ -26,6 +26,7 @@ import type {
   HealthReport,
   Page,
   SearchResults,
+  Statistics,
   Stats,
   TrackListItem,
 } from '@sonic-archive/contracts';
@@ -573,6 +574,28 @@ describe('GET /api/health-report', () => {
         notes: ['Ember - Live Image 2.accurip: 2 of 2 tracks differ from AccurateRip'],
       },
     ]);
+  });
+});
+
+describe('GET /api/statistics', () => {
+  it('describes the releases: decades, genres, artists and rip verdicts', async () => {
+    const body = (await api('/api/statistics')).body as Statistics;
+    // Only Format Sampler (4 tracks) and Live Image (5) count as releases.
+    expect(body).toEqual({
+      releases: 2,
+      decades: [{ decade: 2010, releases: 2 }],
+      undated: 0,
+      origins: [],
+      genres: [{ id: expect.any(Number), name: 'Post-Rock', releases: 1 }],
+      artists: [
+        { id: expect.any(Number), name: 'Cinder Collective', releases: 1 },
+        { id: expect.any(Number), name: 'Ember', releases: 1 },
+      ],
+      rips: [
+        { verdict: 'differs', releases: 1 },
+        { verdict: 'none', releases: 1 },
+      ],
+    });
   });
 });
 

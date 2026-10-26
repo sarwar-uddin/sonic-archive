@@ -43,3 +43,13 @@ scripts, no framing.
 - Component tests run in jsdom against the real route tree with `fetch`
   mocked. Visual checks were done with a headless browser outside the repo;
   a committed end-to-end suite (Playwright) is a candidate for later.
+
+## Charts (M12)
+
+Charts are plain HTML/CSS, no chart library: a handful of ranked bars, one
+column chart and one part-to-whole bar do not justify a dependency. One
+series hue (`--series-1`, the reference blue, validated on the ink surface)
+keeps the OBI red and the rip-verdict colors free to mean what they mean.
+Every mark has a tooltip on hover and keyboard focus; values are at bar tips,
+the column chart has a table view, and the stacked bar's legend lists every
+count, so nothing depends on hovering or on color alone.

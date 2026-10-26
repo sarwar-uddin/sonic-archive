@@ -60,7 +60,7 @@ All endpoints are `GET`, return JSON, and address resources by numeric id.
 
 ## Status
 
-Milestones **M0–M11** are complete, plus a collection-led redesign: the
+Milestones **M0–M12** are complete, plus a collection-led redesign: the
 library has been scanned in full (read-only; verified unchanged afterwards).
 Covers come from folder scans (JPEG/PNG/TIFF) and are served as WebP
 thumbnails. Single-file CD images are split into their tracks by their CUE
@@ -79,4 +79,7 @@ compared side by side on the album page.
 
 Press `/` or Ctrl-K anywhere for a quick-search palette.
 
-Next: a statistics page.
+The Ledger charts the collection: releases by decade, countries of pressing,
+rip verification, genres and most-collected artists.
+
+Possible next steps: ratings and notes, playlists, playback.

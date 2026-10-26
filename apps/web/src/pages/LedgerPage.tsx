@@ -1,7 +1,10 @@
+import type { RipVerdict, Statistics } from '@sonic-archive/contracts';
 import { useQuery } from '@tanstack/react-query';
+import { BarList, ColumnChart, StackedBar } from '../components/Charts.tsx';
+import { VERDICT_LABELS } from '../components/RipLogs.tsx';
 import { ErrorMessage, Loading } from '../components/States.tsx';
 import { api } from '../lib/api.ts';
-import { formatBytes, formatLongDuration, formatResolution, shortCodec } from '../lib/format.ts';
+import { formatBytes, formatResolution, shortCodec } from '../lib/format.ts';
 import { useDocumentTitle } from '../lib/use-document-title.ts';
 import styles from './LedgerPage.module.css';
 import page from './page.module.css';
@@ -12,6 +15,10 @@ export function LedgerPage() {
   const stats = useQuery({ queryKey: ['stats'], queryFn: ({ signal }) => api.stats(signal) });
   const health = useQuery({ queryKey: ['health'], queryFn: ({ signal }) => api.health(signal) });
   const scans = useQuery({ queryKey: ['scans'], queryFn: ({ signal }) => api.scans(signal) });
+  const statistics = useQuery({
+    queryKey: ['statistics'],
+    queryFn: ({ signal }) => api.statistics(signal),
+  });
 
   if (stats.isPending) return <Loading />;
   if (stats.isError) return <ErrorMessage error={stats.error} retry={() => stats.refetch()} />;
@@ -32,9 +39,11 @@ export function LedgerPage() {
         <Figure label="Albums" value={s.albums.toLocaleString('en')} />
         <Figure label="Artists" value={s.artists.toLocaleString('en')} />
         <Figure label="Tracks" value={s.tracks.toLocaleString('en')} />
-        <Figure label="Listening time" value={formatLongDuration(s.durationMs)} />
+        <Figure label="Listening time" value={compactDuration(s.durationMs)} />
         <Figure label="On disk" value={formatBytes(s.totalBytes)} />
       </dl>
+
+      {statistics.data && <Charts data={statistics.data} />}
 
       <section className={page.section} aria-labelledby="formats">
         <h2 id="formats" className={page.sectionTitle}>
@@ -157,4 +166,123 @@ function Figure({ label, value }: { label: string; value: string }) {
       <dd>{value}</dd>
     </div>
   );
+}
+
+const RIP_COLORS: Record<RipVerdict | 'none', string> = {
+  verified: 'var(--verified)',
+  clean: 'var(--paper-dim)',
+  differs: 'var(--warn)',
+  problems: 'var(--accent)',
+  unknown: 'var(--muted)',
+  none: 'var(--status-none)',
+};
+
+const RELEASES: [string, string] = ['release', 'releases'];
+
+/** The shape of the collection, over its releases. */
+function Charts({ data }: { data: Statistics }) {
+  return (
+    <>
+      <section className={page.section} aria-labelledby="decades">
+        <h2 id="decades" className={page.sectionTitle}>
+          Releases by decade
+        </h2>
+        <p className={styles.note}>
+          {data.releases.toLocaleString('en')} releases by album year
+          {data.undated > 0 ? `; ${data.undated} without a year are left out` : ''}.
+        </p>
+        <ColumnChart
+          label="Releases by decade"
+          unit={RELEASES}
+          columns={data.decades.map((d) => ({
+            key: String(d.decade),
+            label: `${d.decade}s`,
+            value: d.releases,
+          }))}
+        />
+      </section>
+
+      <div className={styles.chartGrid}>
+        <section className={page.section} aria-labelledby="origins">
+          <h2 id="origins" className={page.sectionTitle}>
+            Pressed in
+          </h2>
+          <p className={styles.note}>Countries named in the pressing details of folder names.</p>
+          {data.origins.length > 0 ? (
+            <BarList
+              label="Releases by country of pressing"
+              unit={RELEASES}
+              total={data.releases}
+              rows={data.origins.map((o) => ({
+                key: o.country,
+                label: o.country,
+                value: o.releases,
+              }))}
+            />
+          ) : (
+            <p className={styles.note}>No folder names mention a country.</p>
+          )}
+        </section>
+
+        <section className={page.section} aria-labelledby="rips">
+          <h2 id="rips" className={page.sectionTitle}>
+            Rip verification
+          </h2>
+          <p className={styles.note}>What the EAC, XLD and CUETools logs say about each release.</p>
+          <StackedBar
+            label="Releases by rip verdict"
+            unit={RELEASES}
+            segments={data.rips.map((r) => ({
+              key: r.verdict,
+              label: r.verdict === 'none' ? 'No rip log' : VERDICT_LABELS[r.verdict],
+              value: r.releases,
+              color: RIP_COLORS[r.verdict],
+            }))}
+          />
+        </section>
+
+        <section className={page.section} aria-labelledby="genres">
+          <h2 id="genres" className={page.sectionTitle}>
+            Genres
+          </h2>
+          <BarList
+            label="Releases by genre"
+            unit={RELEASES}
+            total={data.releases}
+            rows={data.genres.map((g) => ({
+              key: String(g.id),
+              label: g.name,
+              value: g.releases,
+              to: `/?genre=${g.id}`,
+            }))}
+          />
+        </section>
+
+        <section className={page.section} aria-labelledby="most-collected">
+          <h2 id="most-collected" className={page.sectionTitle}>
+            Most collected
+          </h2>
+          <BarList
+            label="Releases by artist"
+            unit={RELEASES}
+            total={data.releases}
+            rows={data.artists.map((a) => ({
+              key: String(a.id),
+              label: a.name,
+              value: a.releases,
+              to: `/artists/${a.id}`,
+            }))}
+          />
+        </section>
+      </div>
+    </>
+  );
+}
+
+/** "6d 3h", "14h 20m": short enough for a headline figure. */
+export function compactDuration(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  return days > 0 ? `${days}d ${hours}h` : `${hours}h ${minutes % 60}m`;
 }
