@@ -39,10 +39,31 @@ describe('openCatalogDatabase', () => {
   });
 });
 
+describe('openCatalogDatabase (read-only)', () => {
+  it('refuses every write', () => {
+    migrateCatalog(database);
+    const readonly = openCatalogDatabase(path.join(dir, 'data'), { readonly: true });
+    try {
+      expect(() =>
+        readonly.sqlite.prepare("INSERT INTO library_roots (path) VALUES ('/x')").run(),
+      ).toThrow(/readonly|read-only|query_only/i);
+      expect(() => readonly.sqlite.exec('DROP TABLE albums')).toThrow();
+      expect(readonly.sqlite.prepare('SELECT count(*) AS n FROM albums').get()).toEqual({ n: 0 });
+    } finally {
+      readonly.close();
+    }
+  });
+
+  it('does not create a missing database', () => {
+    expect(() => openCatalogDatabase(path.join(dir, 'nowhere'), { readonly: true })).toThrow();
+    expect(fs.existsSync(path.join(dir, 'nowhere'))).toBe(false);
+  });
+});
+
 describe('migrateCatalog', () => {
   it('creates the schema on a fresh database without a pointless backup', () => {
     const result = migrateCatalog(database);
-    expect(result).toEqual({ applied: 1, backupFile: null });
+    expect(result).toEqual({ applied: 2, backupFile: null });
     expect(tableNames(database.sqlite)).toEqual([
       'albums',
       'artists',
@@ -53,6 +74,12 @@ describe('migrateCatalog', () => {
       'scans',
       'track_artists',
       'track_genres',
+      'track_search', // FTS5 virtual table (0001) and its shadow tables:
+      'track_search_config',
+      'track_search_content',
+      'track_search_data',
+      'track_search_docsize',
+      'track_search_idx',
       'tracks',
     ]);
   });

@@ -17,16 +17,33 @@ pnpm check      # typecheck + lint + tests
 pnpm paths      # show where config, database and cache live
 pnpm db:migrate # create or upgrade the catalog database (backs up first)
 pnpm scan       # index the library: read-only, needs --confirm (see docs/safety.md)
+pnpm dev:server # API on http://127.0.0.1:4317 (SONIC_PORT to change)
 ```
 
 ## Layout
 
-| Path               | Purpose                                                                |
-| ------------------ | ---------------------------------------------------------------------- |
-| `packages/catalog` | Domain core: config, scanner, database (no HTTP)                       |
-| `apps/server`      | CLI now; Express API from M3                                           |
-| `docs/adr`         | Architecture decision records                                          |
-| `test-fixtures`    | Synthetic audio library for tests ([details](test-fixtures/README.md)) |
+| Path                 | Purpose                                                                |
+| -------------------- | ---------------------------------------------------------------------- |
+| `packages/catalog`   | Domain core: config, scanner, database, read queries (no HTTP)         |
+| `packages/contracts` | API query schemas and response types, shared by server and web         |
+| `apps/server`        | CLI and the read-only Express API                                      |
+| `docs/adr`           | Architecture decision records                                          |
+| `test-fixtures`      | Synthetic audio library for tests ([details](test-fixtures/README.md)) |
+
+## API
+
+All endpoints are `GET`, return JSON, and address resources by numeric id.
+
+| Endpoint                           | Purpose                                                                                                                           |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/health`, `/api/stats`        | Library status, last scan, totals, format breakdown                                                                               |
+| `/api/albums`, `/api/albums/:id`   | Filter by `q`, `artistId`, `genreId`, `yearFrom`/`yearTo`, `codec`, `lossless`, `minSampleRate`, `minBitDepth`; sort and paginate |
+| `/api/tracks`                      | Track list with technical filters (`bitDepth`, `durationMin`/`durationMax` in seconds, …)                                         |
+| `/api/artists`, `/api/artists/:id` | Artists with their own albums and appearances                                                                                     |
+| `/api/search?q=`                   | Grouped full-text search                                                                                                          |
+| `/api/facets`                      | Genres, years, codecs, sample rates, bit depths                                                                                   |
+| `/api/artwork/:id`                 | Cover image from the cache                                                                                                        |
+| `/api/scans`, `/api/scans/:id`     | Scan history                                                                                                                      |
 
 ## Changing the database schema
 
@@ -40,6 +57,6 @@ pnpm scan       # index the library: read-only, needs --confirm (see docs/safety
 
 ## Status
 
-Milestones **M0 (foundation)**, **M1 (database)** and **M2 (scanner)** are
-complete. Next is M2.5, an authorized sample scan of one or two folders from
-the real library, and then M3, the read-only API.
+Milestones **M0–M3** (foundation, database, scanner, API) are complete, and
+two real album folders have been sample-scanned (M2.5). Next is M4, the web
+frontend.

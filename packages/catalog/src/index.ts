@@ -17,6 +17,7 @@ export {
   type CatalogDb,
   type CatalogExecutor,
   DATABASE_FILE_NAME,
+  type OpenOptions,
   openCatalogDatabase,
 } from './db/database.ts';
 export * from './db/library-repository.ts';
@@ -27,6 +28,7 @@ export {
   migrateCatalog,
 } from './db/migrate.ts';
 export * as schema from './db/schema.ts';
+export { rebuildSearchIndex, toFtsQuery } from './db/search-index.ts';
 export {
   AUDIO_EXTENSIONS,
   type AudioFileEntry,
@@ -41,6 +43,7 @@ export {
   resolveInsideRoot,
 } from './fs/resolve-inside-root.ts';
 export { type CatalogRecord, toCatalogRecord } from './metadata/map.ts';
+export { type CatalogQueries, createCatalogQueries } from './read/catalog-queries.ts';
 export {
   DEFAULT_MASS_MISSING,
   type MassMissingThreshold,

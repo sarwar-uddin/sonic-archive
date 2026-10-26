@@ -16,7 +16,8 @@
     "paths": "node apps/server/src/cli.ts paths",
     "db:migrate": "node apps/server/src/cli.ts migrate",
     "scan": "node apps/server/src/cli.ts scan",
-    "fixtures:generate": "./test-fixtures/generate.sh"
+    "fixtures:generate": "./test-fixtures/generate.sh",
+    "dev:server": "node --watch apps/server/src/main.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.3",

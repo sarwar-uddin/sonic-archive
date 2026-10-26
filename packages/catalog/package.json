@@ -4,13 +4,15 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./testing": "./src/testing/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p .",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
+    "@sonic-archive/contracts": "workspace:*",
     "better-sqlite3": "13.0.3",
     "drizzle-orm": "0.45.4",
     "music-metadata": "12.3.2",

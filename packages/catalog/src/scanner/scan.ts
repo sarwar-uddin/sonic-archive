@@ -26,6 +26,7 @@ import {
   startScan,
   upsertFile,
 } from '../db/library-repository.ts';
+import { rebuildSearchIndex } from '../db/search-index.ts';
 import type { AudioFileEntry, LibraryReader, WalkEvent } from '../fs/library-reader.ts';
 import { PathSafetyError, resolveInsideRoot } from '../fs/resolve-inside-root.ts';
 import { albumFolder, type CatalogRecord, toCatalogRecord } from '../metadata/map.ts';
@@ -130,6 +131,8 @@ async function realScan(
     swept: boolean,
     reason: string | null,
   ): ScanSummary => {
+    // Even a cancelled or failed scan may have written some tracks first.
+    if (counters.added + counters.updated > 0) rebuildSearchIndex(db);
     finishScan(db, scanId, {
       status,
       finishedAt: now(),

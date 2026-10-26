@@ -20,21 +20,35 @@ export interface CatalogDatabase {
 
 export const DATABASE_FILE_NAME = 'sonic.db';
 
+export interface OpenOptions {
+  /**
+   * Open an existing database for reading only. The API server uses this,
+   * so no request handler can modify the catalog even by mistake.
+   */
+  readonly readonly?: boolean;
+}
+
 /**
  * Opens (creating if needed) the catalog database inside the app's data dir.
  * The data dir has already been checked not to overlap the music library
  * (`validateLibraryRoot`).
  */
-export function openCatalogDatabase(dataDir: string): CatalogDatabase {
-  fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+export function openCatalogDatabase(dataDir: string, options: OpenOptions = {}): CatalogDatabase {
   const file = path.join(dataDir, DATABASE_FILE_NAME);
-  const sqlite = new Database(file);
+  let sqlite: Database.Database;
 
-  // WAL lets the API read while a scan writes; NORMAL sync is safe under WAL.
-  sqlite.pragma('journal_mode = WAL');
-  sqlite.pragma('synchronous = NORMAL');
-  // SQLite leaves foreign keys off unless asked, per connection.
-  sqlite.pragma('foreign_keys = ON');
+  if (options.readonly) {
+    sqlite = new Database(file, { readonly: true, fileMustExist: true });
+    sqlite.pragma('query_only = ON');
+  } else {
+    fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+    sqlite = new Database(file);
+    // WAL lets the API read while a scan writes; NORMAL sync is safe under WAL.
+    sqlite.pragma('journal_mode = WAL');
+    sqlite.pragma('synchronous = NORMAL');
+    // SQLite leaves foreign keys off unless asked, per connection.
+    sqlite.pragma('foreign_keys = ON');
+  }
   sqlite.pragma('busy_timeout = 5000');
 
   return {
