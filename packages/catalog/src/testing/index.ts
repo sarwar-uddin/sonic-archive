@@ -12,6 +12,7 @@ export {
   copyFixtureLibrary,
   FIXTURE_AUDIO_COUNT,
   FIXTURE_LIBRARY,
+  FIXTURE_TRACK_COUNT,
   type LibraryCopy,
   makeReadOnly,
   makeWritable,

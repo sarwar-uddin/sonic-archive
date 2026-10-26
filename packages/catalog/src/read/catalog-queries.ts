@@ -36,6 +36,13 @@ import { nameKey } from '../text/normalize.ts';
 type Row = Record<string, unknown>;
 type Param = string | number | null;
 
+/**
+ * True for the first track of each file. A CD image split by its CUE sheet
+ * has several tracks in one file; file sizes are summed over these only.
+ */
+const FIRST_OF_FILE = `NOT EXISTS (SELECT 1 FROM tracks t3
+  WHERE t3.file_id = t.file_id AND t3.segment < t.segment)`;
+
 const ALBUM_STATS_CTE = `
   album_stats AS (
     SELECT t.album_id AS album_id,
@@ -45,7 +52,7 @@ const ALBUM_STATS_CTE = `
            max(t.sample_rate) AS max_sample_rate,
            max(t.bit_depth) AS max_bit_depth,
            min(coalesce(t.lossless, 0)) AS all_lossless,
-           coalesce(sum(f.size), 0) AS total_bytes,
+           coalesce(sum(CASE WHEN ${FIRST_OF_FILE} THEN f.size END), 0) AS total_bytes,
            min(f.rel_path) AS sample_path
     FROM tracks t JOIN files f ON f.id = t.file_id
     WHERE f.status != 'missing' AND t.album_id IS NOT NULL
@@ -73,7 +80,7 @@ const ALBUM_SORT_SQL: Record<AlbumListQuery['sort'], (dir: string) => string> = 
 const TRACK_COLUMNS = `
   t.id, t.title, t.display_artist, t.track_no, t.disc_no, t.year, t.duration_ms, t.codec,
   t.container, t.lossless, t.sample_rate, t.bit_depth, t.channels, t.bitrate,
-  t.has_embedded_art, f.rel_path, f.size, f.status, f.audio_md5`;
+  t.has_embedded_art, t.start_ms, t.end_ms, t.segment, f.rel_path, f.size, f.status, f.audio_md5`;
 
 const TRACK_SORT_SQL: Record<TrackListQuery['sort'], (dir: string) => string> = {
   artist: (d) =>
@@ -490,7 +497,8 @@ export function createCatalogQueries(sqlite: Database.Database): CatalogQueries 
   function stats(): Stats {
     const totals = get(
       `SELECT count(*) AS tracks, coalesce(sum(t.duration_ms), 0) AS duration_ms,
-              coalesce(sum(f.size), 0) AS total_bytes, count(DISTINCT t.album_id) AS albums
+              coalesce(sum(CASE WHEN ${FIRST_OF_FILE} THEN f.size END), 0) AS total_bytes,
+              count(DISTINCT t.album_id) AS albums
        FROM tracks t JOIN files f ON f.id = t.file_id WHERE f.status != 'missing'`,
     );
     const files = get(
@@ -611,6 +619,10 @@ function toTrackSummary(row: Row, credits: Map<number, ArtistRef[]>): TrackSumma
     channels: nullableNumber(row.channels),
     bitrate: nullableNumber(row.bitrate),
     hasEmbeddedArt: Number(row.has_embedded_art) === 1,
+    span:
+      Number(row.segment ?? 0) === 0
+        ? null
+        : { startMs: Number(row.start_ms), endMs: nullableNumber(row.end_ms) },
     file: {
       relPath: String(row.rel_path),
       size: Number(row.size),

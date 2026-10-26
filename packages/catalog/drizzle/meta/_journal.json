@@ -15,6 +15,13 @@
       "when": 1793023491602,
       "tag": "0001_search_index",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793030773720,
+      "tag": "0002_cd_image_tracks",
+      "breakpoints": true
     }
   ]
 }

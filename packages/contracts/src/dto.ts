@@ -51,6 +51,11 @@ export interface TrackSummary {
   readonly channels: number | null;
   readonly bitrate: number | null;
   readonly hasEmbeddedArt: boolean;
+  /**
+   * Where the track lies inside its file, for a track cut from a single-file
+   * CD image by its CUE sheet; null when the track is the whole file.
+   */
+  readonly span: { readonly startMs: number; readonly endMs: number | null } | null;
   readonly file: {
     /** Relative to the library root. Informational; the API never accepts paths. */
     readonly relPath: string;

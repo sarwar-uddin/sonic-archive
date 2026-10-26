@@ -143,14 +143,15 @@ describe('GET /api/health and /api/stats', () => {
     expect(body).toMatchObject({
       status: 'ok',
       library: { configured: true, available: true },
-      lastScan: { status: 'completed', seen: 17, errors: 1 },
+      lastScan: { status: 'completed', seen: 19, errors: 1 },
     });
   });
 
   it('summarizes the catalog', async () => {
     const body = (await api('/api/stats')).body as Stats;
-    expect(body).toMatchObject({ albums: 9, tracks: 16, missingFiles: 0, errorFiles: 1 });
-    expect(body.artists).toBe(9); // composers are not counted as artists
+    // The two CD images count as five tracks.
+    expect(body).toMatchObject({ albums: 10, tracks: 21, missingFiles: 0, errorFiles: 1 });
+    expect(body.artists).toBe(11); // composers are not counted as artists
     expect(body.formats).toContainEqual({
       codec: 'FLAC',
       sampleRate: 96000,
@@ -163,13 +164,14 @@ describe('GET /api/health and /api/stats', () => {
 describe('GET /api/albums', () => {
   it('lists albums sorted by artist by default', async () => {
     const body = (await api('/api/albums')).body as Page<AlbumSummary>;
-    expect(body.total).toBe(9);
+    expect(body.total).toBe(10);
     expect(titles(body)).toEqual([
       'Loose Copies',
       'Northern Lines',
       'Hi-Res Session',
       'Format Sampler',
       'Double Album',
+      'Live Image',
       'Ágætis Morgunn', // "Ísold" sorts with I, not after Z
       '夜明け',
       'Harbour Lights',
@@ -206,10 +208,10 @@ describe('GET /api/albums', () => {
     ['lossless=false', ['Format Sampler']],
     ['minSampleRate=96000', ['Hi-Res Session']],
     ['minBitDepth=24', ['Hi-Res Session']],
-    ['kind=release', ['Format Sampler']],
+    ['kind=release', ['Format Sampler', 'Live Image']],
     ['kind=loose&q=northern', ['Northern Lines']],
     ['codec=alac', ['Hi-Res Session']],
-    ['yearFrom=2010&yearTo=2018', ['Format Sampler', '夜明け', 'Harbour Lights']],
+    ['yearFrom=2010&yearTo=2018', ['Format Sampler', 'Live Image', '夜明け', 'Harbour Lights']],
   ])('filters by %s', async (query, expected) => {
     expect(titles((await api(`/api/albums?${query}`)).body)).toEqual(expected);
   });
@@ -237,9 +239,14 @@ describe('GET /api/albums', () => {
       .body as Page<AlbumSummary>;
     expect(byYear.items.map((a) => a.year)).toEqual([2020, 2018, 2015]);
     const page2 = (await api('/api/albums?sort=title&limit=4&page=2')).body as Page<AlbumSummary>;
-    expect(page2).toMatchObject({ page: 2, limit: 4, total: 9 });
+    expect(page2).toMatchObject({ page: 2, limit: 4, total: 10 });
     // Page 1 is Ágætis (sorted as "agaetis"), Double, Format, Harbour.
-    expect(titles(page2)).toEqual(['Hi-Res Session', 'Loose Copies', 'Northern Lines', 'Untagged']);
+    expect(titles(page2)).toEqual([
+      'Hi-Res Session',
+      'Live Image',
+      'Loose Copies',
+      'Northern Lines',
+    ]);
   });
 });
 
@@ -267,6 +274,18 @@ describe('GET /api/albums/:id', () => {
     expect(body.totalBytes).toBeGreaterThan(0);
   });
 
+  it('lists the tracks of split CD images, counting each file once', async () => {
+    const body = (await api(`/api/albums/${await albumId('Live Image')}`)).body as AlbumDetail;
+    expect(body.discs.map((d) => [d.discNo, d.tracks.map((t) => t.title)])).toEqual([
+      [1, ['Kindling', 'Smoke', 'Ash']],
+      [2, ['Embers', 'Daybreak']],
+    ]);
+    expect(body).toMatchObject({ trackCount: 5, durationMs: 5000, kind: 'release' });
+    expect(body.discs[0]?.tracks[1]?.span).toEqual({ startMs: 1000, endMs: 2000 });
+    const sizes = new Set(body.discs.flatMap((d) => d.tracks.map((t) => t.file.size)));
+    expect(body.totalBytes).toBe([...sizes].reduce((a, b) => a + b, 0));
+  });
+
   it('404s for an unknown album', async () => {
     expect((await api('/api/albums/999999')).status).toBe(404);
   });
@@ -278,7 +297,8 @@ describe('GET /api/tracks', () => {
     ['q=duet', ['Duet']],
     ['codec=opus', ['Open']],
     // Fixture tones are 0.25–0.5 s; only the MP3 is longer (encoder padding).
-    ['durationMin=0.54', ['Lossy']],
+    // CD image tracks are 1 s.
+    ['durationMin=0.54&durationMax=0.9', ['Lossy']],
     ['durationMax=0.3', ['Overture']],
   ])('filters by %s', async (query, expected) => {
     const body = (await api(`/api/tracks?${query}`)).body as Page<TrackListItem>;
@@ -458,6 +478,7 @@ describe('GET /api/health-report', () => {
     expect(body.missingArtwork.items.map((a) => a.title)).toEqual([
       'Ágætis Morgunn', // locale-aware: sorts with A
       'Harbour Lights',
+      'Live Image',
       'Loose Copies',
       'Untagged',
       '夜明け',
@@ -472,6 +493,7 @@ describe('GET /api/health-report', () => {
         'No year',
       ],
     });
+    // The tracks of one CD image share its checksum but are not duplicates.
     expect(body.exactDuplicates.items).toEqual([
       {
         audioMd5: 'f92951abe8308de3f54a91cda07e7faa',
@@ -493,7 +515,7 @@ describe('scans', () => {
   it('lists scan history', async () => {
     const res = await api('/api/scans');
     expect(res.body).toEqual([
-      expect.objectContaining({ id: 1, status: 'completed', mode: 'incremental', seen: 17 }),
+      expect.objectContaining({ id: 1, status: 'completed', mode: 'incremental', seen: 19 }),
     ]);
     expect((await api('/api/scans/1')).body.startedAt).toMatch(/^\d{4}-\d\d-\d\dT/);
     expect((await api('/api/scans/99')).status).toBe(404);
@@ -522,7 +544,7 @@ describe('missing files', () => {
       const albums = (await request(missingApp).get('/api/albums')).body as Page<AlbumSummary>;
       expect(titles(albums)).not.toContain('Untagged');
       const stats = (await request(missingApp).get('/api/stats')).body as Stats;
-      expect(stats).toMatchObject({ tracks: 15, missingFiles: 1 });
+      expect(stats).toMatchObject({ tracks: 20, missingFiles: 1 });
     } finally {
       copy.cleanup();
       other.cleanup();

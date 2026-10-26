@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, asc, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import { nameKey } from '../text/normalize.ts';
 import type { CatalogExecutor } from './database.ts';
 import {
@@ -108,7 +108,7 @@ export function upsertAlbum(db: CatalogExecutor, input: AlbumUpsertInput): numbe
   return existing.id;
 }
 
-/** The album a file's track belongs to, with its current artwork. */
+/** The album a file's track(s) belong to, with its current artwork. */
 export function getAlbumOfFile(
   db: CatalogExecutor,
   fileId: number,
@@ -118,6 +118,7 @@ export function getAlbumOfFile(
     .from(tracks)
     .innerJoin(albums, eq(albums.id, tracks.albumId))
     .where(eq(tracks.fileId, fileId))
+    .orderBy(asc(tracks.segment))
     .get();
 }
 
@@ -134,7 +135,12 @@ export interface Credit {
  * Every column is required (null when unknown): a rescan reflects the file as
  * it is now, so a tag removed from the file must clear its column too.
  */
-export type TrackValues = Required<Omit<typeof tracks.$inferInsert, 'id'>>;
+export type TrackValues = {
+  [K in keyof Omit<typeof tracks.$inferInsert, 'id'>]-?: Exclude<
+    (typeof tracks.$inferInsert)[K],
+    undefined
+  >;
+};
 
 export interface TrackUpsertInput extends TrackValues {
   /** In tag order; position is assigned per role. */
@@ -143,19 +149,19 @@ export interface TrackUpsertInput extends TrackValues {
 }
 
 /**
- * Upserts the track for a file and replaces its artist and genre links.
- * Runs in its own transaction (a savepoint if already inside one), so a
- * track is never left with half its credits.
+ * Upserts one track of a file (by file and segment) and replaces its artist
+ * and genre links. Runs in its own transaction (a savepoint if already inside
+ * one), so a track is never left with half its credits.
  */
 export function upsertTrack(db: CatalogExecutor, input: TrackUpsertInput): number {
   const { credits, genreIds, ...values } = input;
-  const { fileId: _, ...updatable } = values;
+  const { fileId: _, segment: __, ...updatable } = values;
 
   return db.transaction((tx) => {
     const existing = tx
       .select({ id: tracks.id })
       .from(tracks)
-      .where(eq(tracks.fileId, values.fileId))
+      .where(and(eq(tracks.fileId, values.fileId), eq(tracks.segment, values.segment)))
       .get();
     let trackId: number;
     if (existing) {
@@ -177,8 +183,50 @@ export function upsertTrack(db: CatalogExecutor, input: TrackUpsertInput): numbe
   });
 }
 
+/**
+ * Removes a file's tracks other than `keepSegments`, with their links: after
+ * an image gains a CUE sheet its whole-file track goes, and the reverse.
+ * Tracks are derived from the file, so they are rebuilt, not lost.
+ */
+export function removeOtherSegments(
+  db: CatalogExecutor,
+  fileId: number,
+  keepSegments: readonly number[],
+): void {
+  const stale = db
+    .select({ id: tracks.id })
+    .from(tracks)
+    .where(and(eq(tracks.fileId, fileId), notInArray(tracks.segment, [...keepSegments])))
+    .all()
+    .map((t) => t.id);
+  if (stale.length === 0) return;
+  db.delete(trackArtists).where(inArray(trackArtists.trackId, stale)).run();
+  db.delete(trackGenres).where(inArray(trackGenres.trackId, stale)).run();
+  db.delete(tracks).where(inArray(tracks.id, stale)).run();
+}
+
+/**
+ * Deletes albums no track belongs to any more: left behind when retagging or
+ * a change in grouping rules moves tracks to another album. Albums are
+ * derived from tracks; tracks of missing files keep theirs. Returns the count.
+ */
+export function pruneEmptyAlbums(db: CatalogExecutor): number {
+  return db
+    .delete(albums)
+    .where(
+      sql`${albums.id} NOT IN (SELECT ${tracks.albumId} FROM ${tracks} WHERE ${tracks.albumId} IS NOT NULL)`,
+    )
+    .run().changes;
+}
+
+/** The first track of a file (its only one, unless it is a split CD image). */
 export function getTrackByFileId(db: CatalogExecutor, fileId: number): TrackRow | undefined {
-  return db.select().from(tracks).where(eq(tracks.fileId, fileId)).get();
+  return db
+    .select()
+    .from(tracks)
+    .where(eq(tracks.fileId, fileId))
+    .orderBy(asc(tracks.segment))
+    .get();
 }
 
 function positionCredits(credits: readonly Credit[]) {

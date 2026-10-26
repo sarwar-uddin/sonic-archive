@@ -286,6 +286,9 @@ describe('tracks', () => {
     });
     const values: TrackValues = {
       fileId: file.id,
+      segment: 0,
+      startMs: null,
+      endMs: null,
       albumId: null,
       title: 'Song',
       displayArtist: 'A feat. B',

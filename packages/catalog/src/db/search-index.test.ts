@@ -60,6 +60,9 @@ describe('rebuildSearchIndex', () => {
     });
     upsertTrack(db, {
       fileId: file.id,
+      segment: 0,
+      startMs: null,
+      endMs: null,
       albumId,
       title: 'Svefn-g-englar',
       displayArtist: 'Sigur Rós',

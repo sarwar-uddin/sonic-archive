@@ -42,6 +42,13 @@ export function AlbumView({ album }: { readonly album: AlbumDetail }) {
   const format = `${album.codecs.map(shortCodec).join('+') || '—'} ${formatResolution(album.maxBitDepth, album.maxSampleRate)}`;
   const hiRes = isHiRes(album.maxBitDepth, album.maxSampleRate);
 
+  // Disc folders give disc numbers even when no tag says how many discs.
+  const discCount = Math.max(
+    album.totalDiscs ?? 0,
+    album.discs.filter((d) => d.discNo !== null).length,
+  );
+  const fromImage = album.discs.some((d) => d.tracks.some((t) => t.span !== null));
+
   return (
     <article>
       <header className={styles.hero}>
@@ -128,8 +135,9 @@ export function AlbumView({ album }: { readonly album: AlbumDetail }) {
             <Spec label="Fidelity">{album.lossless ? 'Lossless' : 'Contains lossy tracks'}</Spec>
             <Spec label="Tracks">
               {plural(album.trackCount, 'track')}
-              {album.totalDiscs && album.totalDiscs > 1 ? ` on ${album.totalDiscs} discs` : ''}
+              {discCount > 1 ? ` on ${discCount} discs` : ''}
             </Spec>
+            {fromImage && <Spec label="Rip">Single-file CD image, split by CUE sheet</Spec>}
             <Spec label="Running time">{formatLongDuration(album.durationMs)}</Spec>
             <Spec label="Size">{formatBytes(album.totalBytes)}</Spec>
             {album.edition.length > 0 && <Spec label="Pressing">{album.edition.join(' · ')}</Spec>}

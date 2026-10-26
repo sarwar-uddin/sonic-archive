@@ -126,6 +126,25 @@ flac_track 784 0.5 44100 16 "$out/Kōji Ensemble/夜明け (2018)/01 光.flac" \
   "TITLE=光" "ARTIST=Kōji Ensemble" "ALBUMARTIST=Kōji Ensemble" "ALBUM=夜明け" "DATE=2018" \
   "TRACKNUMBER=1"
 
+# --- Two single-file CD images with CUE sheets ------------------------------
+# Untagged, as EAC leaves them: album and track details live only in the
+# sheets. The sheets name "*.wav" (written before compression), and the disc
+# titles carry disc markers and a catalogue suffix that must not split the set.
+album="$out/Ember/Live Image (2010)"
+flac_track 220 3 44100 16 "$album/CD1/Ember - Live Image.flac"
+printf '%s\r\n' 'REM GENRE "Post-Rock"' 'REM DATE 2010' 'PERFORMER "Ember"' \
+  'TITLE "Live Image (CD 1)"' 'FILE "Ember - Live Image.wav" WAVE' \
+  '  TRACK 01 AUDIO' '    TITLE "Kindling"' '    INDEX 01 00:00:00' \
+  '  TRACK 02 AUDIO' '    TITLE "Smoke"' '    INDEX 00 00:00:70' '    INDEX 01 00:01:00' \
+  '  TRACK 03 AUDIO' '    TITLE "Ash"' '    PERFORMER "Ember feat. Wren"' '    INDEX 01 00:02:00' \
+  >"$album/CD1/Ember - Live Image.wav.cue"
+flac_track 247 2 44100 16 "$album/CD2/Ember - Live Image 2.flac"
+printf '%s\r\n' 'REM DATE 2010' 'PERFORMER "Ember"' 'TITLE "Live Image.TEST-102.Japan"' \
+  'FILE "Ember - Live Image 2.flac" WAVE' \
+  '  TRACK 01 AUDIO' '    TITLE "Embers"' '    INDEX 01 00:00:00' \
+  '  TRACK 02 AUDIO' '    TITLE "Daybreak"' '    INDEX 01 00:01:00' \
+  >"$album/CD2/Ember - Live Image 2.cue"
+
 # --- Problem files ----------------------------------------------------------
 # No tags at all.
 flac_track 831 0.5 44100 16 "$out/Untagged/unknown.flac"

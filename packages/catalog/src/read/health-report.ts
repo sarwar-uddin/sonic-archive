@@ -28,7 +28,10 @@ export function buildHealthReport(sqlite: Database.Database): HealthReport {
   const facts: Facts[] = all(
     `SELECT t.id, t.album_id, a.group_key, a.title AS album_title, t.title, t.display_artist,
             (SELECT count(*) FROM track_artists ta WHERE ta.track_id = t.id AND ta.role = 'artist') AS credits,
-            t.track_no, t.disc_no, t.year, t.duration_ms, f.rel_path, f.audio_md5
+            t.track_no, t.disc_no, t.year, t.duration_ms, f.rel_path,
+            -- One checksum per file: the tracks of a split CD image share it.
+            CASE WHEN t.segment = (SELECT min(segment) FROM tracks WHERE file_id = t.file_id)
+                 THEN f.audio_md5 END AS audio_md5
      FROM tracks t JOIN files f ON f.id = t.file_id LEFT JOIN albums a ON a.id = t.album_id
      WHERE f.status != 'missing'
      ORDER BY f.rel_path`,
@@ -98,7 +101,9 @@ export function buildHealthReport(sqlite: Database.Database): HealthReport {
 
   const missing = all(
     `SELECT f.rel_path, f.missing_since, t.id AS track_id FROM files f
-     LEFT JOIN tracks t ON t.file_id = f.id WHERE f.status = 'missing' ORDER BY f.rel_path`,
+     LEFT JOIN tracks t ON t.file_id = f.id
+       AND t.segment = (SELECT min(segment) FROM tracks WHERE file_id = f.id)
+     WHERE f.status = 'missing' ORDER BY f.rel_path`,
   );
   const trackRefs = new Map(
     all(

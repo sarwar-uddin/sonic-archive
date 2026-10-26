@@ -17,6 +17,7 @@ export function track(overrides: Partial<TrackSummary> & { id: number }): TrackS
     channels: 2,
     bitrate: 2_400_000,
     hasEmbeddedArt: false,
+    span: null,
     file: {
       relPath: `Basalt/${overrides.id}.flac`,
       size: 40_000_000,

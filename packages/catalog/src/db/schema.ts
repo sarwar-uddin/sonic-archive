@@ -146,15 +146,22 @@ export const albums = sqliteTable(
   (t) => [index('albums_album_artist_idx').on(t.albumArtistId)],
 );
 
-/** Parsed metadata for one file. Exactly one track per file. */
+/**
+ * Parsed metadata for one track. Usually one track per file; a single-file
+ * CD image with a CUE sheet holds one track per sheet entry (`segment`).
+ */
 export const tracks = sqliteTable(
   'tracks',
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
     fileId: integer('file_id')
       .notNull()
-      .unique()
       .references(() => files.id),
+    /** 0 for a whole file; the CUE track number for a track cut from an image. */
+    segment: integer('segment').notNull().default(0),
+    /** Where the track starts and ends inside its file; null for a whole file. */
+    startMs: integer('start_ms'),
+    endMs: integer('end_ms'),
     albumId: integer('album_id').references(() => albums.id),
     title: text('title'),
     /** The artist string exactly as tagged, e.g. "A feat. B". */
@@ -175,7 +182,11 @@ export const tracks = sqliteTable(
     bitrate: integer('bitrate'),
     hasEmbeddedArt: integer('has_embedded_art', { mode: 'boolean' }).notNull().default(false),
   },
-  (t) => [index('tracks_album_idx').on(t.albumId)],
+  (t) => [
+    // The idempotency key: rescanning a file updates its track(s) in place.
+    uniqueIndex('tracks_file_segment_unique').on(t.fileId, t.segment),
+    index('tracks_album_idx').on(t.albumId),
+  ],
 );
 
 export const CREDIT_ROLES = ['artist', 'composer'] as const;

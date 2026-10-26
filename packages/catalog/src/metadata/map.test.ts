@@ -1,6 +1,14 @@
 import type { IAudioMetadata, ICommonTagsResult, IFormat } from 'music-metadata';
 import { describe, expect, it } from 'vitest';
-import { albumFolder, folderTitle, toCatalogRecord, VARIOUS_ARTISTS } from './map.ts';
+import {
+  albumFolder,
+  cleanAlbumTitle,
+  discFromFolder,
+  folderTitle,
+  splitByCue,
+  toCatalogRecord,
+  VARIOUS_ARTISTS,
+} from './map.ts';
 
 function meta(
   common: Partial<ICommonTagsResult> = {},
@@ -23,11 +31,48 @@ describe('toCatalogRecord: albums', () => {
     expect(r.album.groupKey).toBe('mbid:abc-123');
   });
 
-  it('keys by normalized album artist and title otherwise', () => {
-    const a = toCatalogRecord(meta({ album: 'Ágætis', albumartist: 'Sigur Rós' }), 'a.flac');
-    const b = toCatalogRecord(meta({ album: 'agætis ', albumartist: 'SIGUR ROS' }), 'b.flac');
-    expect(a.album.groupKey).toBe('tag:sigur ros|agætis');
+  it('keys by normalized album artist, title and album folder otherwise', () => {
+    const a = toCatalogRecord(meta({ album: 'Ágætis', albumartist: 'Sigur Rós' }), 'S/Á/a.flac');
+    const b = toCatalogRecord(meta({ album: 'agætis ', albumartist: 'SIGUR ROS' }), 'S/Á/b.flac');
+    expect(a.album.groupKey).toBe('tag:sigur ros|agætis|S/Á');
     expect(b.album.groupKey).toBe(a.album.groupKey);
+  });
+
+  it('keeps two pressings of one album apart, but joins disc folders', () => {
+    const tags = { album: 'Master Of Puppets (32DP 448)', albumartist: 'Metallica' };
+    const japan = toCatalogRecord(meta(tags), 'M/1986 Japan 32DP 448/a.flac');
+    const shm = toCatalogRecord(
+      meta({ ...tags, album: 'Master Of Puppets [SHM-CD, UICR-1139, Japan]' }),
+      'M/SHM-CD/a.flac',
+    );
+    expect(japan.album.title).toBe('Master Of Puppets');
+    expect(shm.album.title).toBe('Master Of Puppets');
+    expect(japan.album.groupKey).not.toBe(shm.album.groupKey);
+
+    const cd1 = toCatalogRecord(meta({ album: 'Ummagumma (CD 1)' }), 'P/Ummagumma/CD1/a.flac');
+    const cd2 = toCatalogRecord(meta({ album: 'Ummagumma (CD 2)' }), 'P/Ummagumma/CD2/a.flac');
+    expect(cd1.album.groupKey).toBe(cd2.album.groupKey);
+    expect([cd1.track.discNo, cd2.track.discNo]).toEqual([1, 2]);
+  });
+
+  it('drops a disc folder name ending the title, and joins those discs', () => {
+    const tags = (disc: string) => ({
+      album: `''Lift Yr. Skinny Fists'' [PCD-5608~9]: (${disc})`,
+      albumartist: 'GYBE',
+    });
+    const one = toCatalogRecord(meta(tags('One')), 'G/Lift Yr [PCD-5608~9]/(One)/01.flac');
+    const two = toCatalogRecord(meta(tags('Two')), 'G/Lift Yr [PCD-5608~9]/(Two)/01.flac');
+    expect(one.album.title).toBe("''Lift Yr. Skinny Fists''");
+    expect(one.album.groupKey).toBe(two.album.groupKey);
+    expect([one.track.discNo, two.track.discNo]).toEqual([1, 2]);
+  });
+
+  it('drops a leading year from the title only when it is the album year', () => {
+    const title = (album: string, year: number) =>
+      toCatalogRecord(meta({ album, year }), 'x/a.flac').album.title;
+    expect(title('1968 A Saucerful of Secrets', 1968)).toBe('A Saucerful of Secrets');
+    expect(title('1984', 1984)).toBe('1984');
+    expect(title('2112 Live', 1977)).toBe('2112 Live');
   });
 
   it('falls back from album artist to the first track artist', () => {
@@ -200,5 +245,93 @@ describe('albumFolder', () => {
     ['01.flac', ''],
   ])('%s -> %s', (relPath, expected) => {
     expect(albumFolder(relPath)).toBe(expected);
+  });
+});
+
+describe('cleanAlbumTitle', () => {
+  // Every case comes from a CUE sheet or tag in the collection this was built for.
+  it.each([
+    ['Paranoid (TECP-23893)', 'Paranoid'],
+    ['Dark Side of the Moon.CP35-3017.Japan', 'Dark Side of the Moon'],
+    ['The Wall.50DP361.Japan', 'The Wall'],
+    ['Ummagumma (CD 1)', 'Ummagumma'],
+    ['Deadwing - Japan CD1 (IECP-20003)', 'Deadwing'],
+    ['Deadwing - Japan Bonus Disc (IECP-20004)', 'Deadwing'],
+    ['Leviathan [Japan]', 'Leviathan'],
+    ['Still Life (CDVILED78)', 'Still Life'],
+    ['Rust In Peace (1990 Capitol, CDP 7 91935 2, USA)', 'Rust In Peace'],
+    ['The Soft Parade (975 005-2)', 'The Soft Parade'],
+    ['Symbolic [Roadrunner Records, RR 8957-2, Netherlands]', 'Symbolic'],
+  ])('%s → %s', (input, expected) => {
+    expect(cleanAlbumTitle(input)).toBe(expected);
+  });
+
+  it.each([
+    'Damnation (Metal Mind)',
+    'Nuovo Cinema Paradiso [Original Motion Picture Soundtrack]',
+    'Koyaanisqatsi (complete original soundtrack version)',
+    'Metropolis Pt. 2 : Scenes From A Memory',
+    'Greatest Hits Vol.12',
+    'Live 1972',
+    '(Japan)',
+  ])('keeps %s', (title) => {
+    expect(cleanAlbumTitle(title)).toBe(title);
+  });
+});
+
+describe('discFromFolder', () => {
+  it.each([
+    ['A/CD1/x.flac', 1],
+    ['A/Disc 2of2/x.flac', 2],
+    ['A/CD 1 (50DP361)/x.flac', 1],
+    ['A/CD2 - Bonus CD/x.flac', 2],
+    ['A/(Two)/x.flac', 2],
+    ['A/One/x.flac', null],
+    ['A/Album/x.flac', null],
+  ])('%s → %s', (relPath, disc) => {
+    expect(discFromFolder(relPath)).toBe(disc);
+  });
+});
+
+describe('splitByCue', () => {
+  it('makes one record per segment, keeping album and format', () => {
+    const record = toCatalogRecord(
+      meta(
+        { album: 'Image', artist: 'Band', composer: ['Writer'] },
+        { codec: 'FLAC', duration: 90 },
+      ),
+      'Band/Image/image.flac',
+    );
+    const [first, second] = splitByCue(record, [
+      { number: 1, title: 'One', performer: null, startMs: 0, endMs: 60_000, durationMs: 60_000 },
+      {
+        number: 2,
+        title: 'Two',
+        performer: 'Guest',
+        startMs: 60_000,
+        endMs: null,
+        durationMs: 30_000,
+      },
+    ]);
+    expect(first?.track).toMatchObject({
+      segment: 1,
+      trackNo: 1,
+      trackTotal: 2,
+      title: 'One',
+      displayArtist: 'Band',
+      codec: 'FLAC',
+      startMs: 0,
+      endMs: 60_000,
+    });
+    expect(second?.track).toMatchObject({
+      segment: 2,
+      title: 'Two',
+      displayArtist: 'Guest',
+      durationMs: 30_000,
+      endMs: null,
+    });
+    expect(second?.artists).toEqual(['Guest']);
+    expect(first?.composers).toEqual([]);
+    expect(first?.album).toEqual(record.album);
   });
 });

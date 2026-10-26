@@ -8,6 +8,7 @@ import {
   copyFixtureLibrary,
   FIXTURE_AUDIO_COUNT,
   FIXTURE_LIBRARY,
+  FIXTURE_TRACK_COUNT,
   type LibraryCopy,
   makeReadOnly,
   makeWritable,
@@ -90,7 +91,7 @@ describe('first scan of the fixture library', () => {
       status: 'error',
       error_message: expect.stringMatching(/FLAC/),
     });
-    expect(one('SELECT count(*) AS n FROM tracks')).toEqual({ n: FIXTURE_AUDIO_COUNT - 1 });
+    expect(one('SELECT count(*) AS n FROM tracks')).toEqual({ n: FIXTURE_TRACK_COUNT });
   });
 
   it('skips hidden files, AppleDouble files and non-audio files', async () => {
@@ -100,8 +101,8 @@ describe('first scan of the fixture library', () => {
       false,
     );
     expect(reader.stats.skippedHidden).toBeGreaterThanOrEqual(3);
-    // notes.txt plus four images (cover/folder/back.jpg, Artwork/Front.png)
-    expect(reader.stats.skippedNonAudio).toBe(5);
+    // notes.txt, four images (cover/folder/back.jpg, Artwork/Front.png), two CUE sheets
+    expect(reader.stats.skippedNonAudio).toBe(7);
   });
 
   it('groups tracks into albums', async () => {
@@ -109,13 +110,29 @@ describe('first scan of the fixture library', () => {
     expect(query('SELECT group_key, title FROM albums ORDER BY group_key')).toEqual([
       { group_key: 'dir:Untagged', title: 'Untagged' },
       { group_key: 'mbid:11111111-2222-4333-8444-555555555555', title: 'Double Album' },
-      { group_key: 'tag:aurora field|loose copies', title: 'Loose Copies' },
-      { group_key: 'tag:aurora field|northern lines', title: 'Northern Lines' },
-      { group_key: 'tag:basalt quartet|hi-res session', title: 'Hi-Res Session' },
-      { group_key: 'tag:cinder collective|format sampler', title: 'Format Sampler' },
-      { group_key: 'tag:isold|agætis morgunn', title: 'Ágætis Morgunn' },
-      { group_key: 'tag:koji ensemble|夜明け', title: '夜明け' },
-      { group_key: 'tag:various artists|harbour lights', title: 'Harbour Lights' },
+      { group_key: 'tag:aurora field|loose copies|Duplicates', title: 'Loose Copies' },
+      {
+        group_key: 'tag:aurora field|northern lines|Aurora Field/Northern Lines (2001)',
+        title: 'Northern Lines',
+      },
+      {
+        group_key: 'tag:basalt quartet|hi-res session|Basalt Quartet/Hi-Res Session (2020)',
+        title: 'Hi-Res Session',
+      },
+      {
+        group_key: 'tag:cinder collective|format sampler|Cinder Collective/Format Sampler (2015)',
+        title: 'Format Sampler',
+      },
+      { group_key: 'tag:ember|live image|Ember/Live Image (2010)', title: 'Live Image' },
+      {
+        group_key: 'tag:isold|agætis morgunn|Ísold/Ágætis Morgunn (2005)',
+        title: 'Ágætis Morgunn',
+      },
+      { group_key: 'tag:koji ensemble|夜明け|Kōji Ensemble/夜明け (2018)', title: '夜明け' },
+      {
+        group_key: 'tag:various artists|harbour lights|Various Artists/Harbour Lights (2010)',
+        title: 'Harbour Lights',
+      },
     ]);
   });
 
@@ -184,6 +201,7 @@ describe('first scan of the fixture library', () => {
       { name: 'Ambient' },
       { name: 'Chamber' },
       { name: 'Classical' },
+      { name: 'Post-Rock' },
     ]);
   });
 
@@ -316,6 +334,151 @@ describe('CUE sheets', () => {
   });
 });
 
+describe('single-file CD images', () => {
+  const imageTracks = () =>
+    query(
+      `SELECT t.segment, t.disc_no, t.track_no, t.track_total, t.title, t.display_artist,
+              t.start_ms, t.end_ms, t.duration_ms, a.title AS album
+       FROM tracks t JOIN files f ON f.id = t.file_id JOIN albums a ON a.id = t.album_id
+       WHERE f.rel_path LIKE 'Ember/%' ORDER BY t.disc_no, t.track_no`,
+    );
+
+  it('splits each image into the tracks of its sheet, and joins the discs', async () => {
+    await scan();
+    expect(imageTracks()).toEqual([
+      {
+        segment: 1,
+        disc_no: 1,
+        track_no: 1,
+        track_total: 3,
+        title: 'Kindling',
+        display_artist: 'Ember',
+        start_ms: 0,
+        end_ms: 1000,
+        duration_ms: 1000,
+        album: 'Live Image',
+      },
+      {
+        segment: 2,
+        disc_no: 1,
+        track_no: 2,
+        track_total: 3,
+        title: 'Smoke',
+        display_artist: 'Ember',
+        start_ms: 1000,
+        end_ms: 2000,
+        duration_ms: 1000,
+        album: 'Live Image',
+      },
+      {
+        segment: 3,
+        disc_no: 1,
+        track_no: 3,
+        track_total: 3,
+        title: 'Ash',
+        display_artist: 'Ember feat. Wren',
+        start_ms: 2000,
+        end_ms: null,
+        duration_ms: 1000,
+        album: 'Live Image',
+      },
+      {
+        segment: 1,
+        disc_no: 2,
+        track_no: 1,
+        track_total: 2,
+        title: 'Embers',
+        display_artist: 'Ember',
+        start_ms: 0,
+        end_ms: 1000,
+        duration_ms: 1000,
+        album: 'Live Image',
+      },
+      {
+        segment: 2,
+        disc_no: 2,
+        track_no: 2,
+        track_total: 2,
+        title: 'Daybreak',
+        display_artist: 'Ember',
+        start_ms: 1000,
+        end_ms: null,
+        duration_ms: 1000,
+        album: 'Live Image',
+      },
+    ]);
+    expect(
+      one(
+        `SELECT a.year, ar.name AS artist FROM albums a JOIN artists ar ON ar.id = a.album_artist_id
+         WHERE a.title = 'Live Image'`,
+      ),
+    ).toEqual({ year: 2010, artist: 'Ember' });
+  });
+
+  it('keeps one file row per image, and credits the per-track performer', async () => {
+    await scan();
+    expect(one("SELECT count(*) AS n FROM files WHERE rel_path LIKE 'Ember/%'")).toEqual({ n: 2 });
+    expect(
+      query(
+        `SELECT ar.name FROM track_artists ta JOIN artists ar ON ar.id = ta.artist_id
+         JOIN tracks t ON t.id = ta.track_id WHERE t.title = 'Ash'`,
+      ),
+    ).toEqual([{ name: 'Ember feat. Wren' }]);
+  });
+
+  it('goes back to one whole-file track when the sheet is removed', async () => {
+    await scan();
+    const cd2 = path.join(lib.root, 'Ember/Live Image (2010)/CD2');
+    fs.rmSync(path.join(cd2, 'Ember - Live Image 2.cue'));
+    await scan({ mode: 'full' });
+    expect(
+      query(
+        `SELECT t.segment, t.start_ms, t.duration_ms FROM tracks t JOIN files f ON f.id = t.file_id
+         WHERE f.rel_path LIKE 'Ember/%/CD2/%'`,
+      ),
+    ).toEqual([{ segment: 0, start_ms: null, duration_ms: 2000 }]);
+    // The removed segments take their credit and genre links with them.
+    expect(
+      one(
+        `SELECT (SELECT count(*) FROM track_artists WHERE track_id NOT IN (SELECT id FROM tracks)) +
+                (SELECT count(*) FROM track_genres WHERE track_id NOT IN (SELECT id FROM tracks)) AS n`,
+      ),
+    ).toEqual({ n: 0 });
+  });
+
+  it('does not split a file the only sheet in its folder does not name', async () => {
+    const dir = path.join(lib.root, 'Stray');
+    fs.mkdirSync(dir);
+    fs.copyFileSync(path.join(lib.root, UNTAGGED), path.join(dir, 'unrelated.flac'));
+    fs.writeFileSync(
+      path.join(dir, 'other.cue'),
+      'FILE "image.flac" WAVE\n TRACK 01 AUDIO\n  INDEX 01 00:00:00\n TRACK 02 AUDIO\n  INDEX 01 00:00:30\n',
+    );
+    await scan();
+    expect(
+      query(
+        "SELECT t.segment FROM tracks t JOIN files f ON f.id = t.file_id WHERE f.rel_path = 'Stray/unrelated.flac'",
+      ),
+    ).toEqual([{ segment: 0 }]);
+  });
+
+  it('removes albums left without tracks', async () => {
+    await scan();
+    expect(one("SELECT count(*) AS n FROM albums WHERE title = 'Loose Copies'")).toEqual({ n: 1 });
+    // Its only file loses its tags, so its track moves to a folder album.
+    const copy = path.join(lib.root, 'Duplicates/First Light (copy).flac');
+    fs.copyFileSync(path.join(lib.root, UNTAGGED), copy);
+    fs.utimesSync(copy, new Date(), new Date(2_000_000_000_000));
+    await scan();
+    expect(one("SELECT count(*) AS n FROM albums WHERE title = 'Loose Copies'")).toEqual({ n: 0 });
+    expect(
+      one(
+        'SELECT count(*) AS n FROM albums WHERE id NOT IN (SELECT album_id FROM tracks WHERE album_id IS NOT NULL)',
+      ),
+    ).toEqual({ n: 0 });
+  });
+});
+
 describe('rescanning', () => {
   it('is idempotent: identical rows and ids', async () => {
     await scan();
@@ -331,6 +494,15 @@ describe('rescanning', () => {
       errors: 1,
     });
     expect(catalogState()).toEqual(before);
+  });
+
+  it('a full rescan refreshes the search index even when no file changed', async () => {
+    await scan();
+    // Simulate an index built under older rules.
+    catalog.database.sqlite.prepare('DELETE FROM track_search').run();
+    const summary = await scan({ mode: 'full' });
+    expect(summary.counters).toMatchObject({ added: 0, updated: 0 });
+    expect(one('SELECT count(*) AS n FROM track_search')).toEqual({ n: FIXTURE_TRACK_COUNT });
   });
 
   it('a full rescan re-reads every file without duplicating anything', async () => {
@@ -411,7 +583,7 @@ describe('missing files', () => {
 
     const refused = await scan({ massMissing: threshold });
     expect(refused).toMatchObject({ status: 'aborted', swept: false });
-    expect(refused.reason).toMatch(/4 of 17 known files were not found/);
+    expect(refused.reason).toMatch(/4 of 19 known files were not found/);
     expect(one("SELECT count(*) AS n FROM files WHERE status = 'missing'")).toEqual({ n: 0 });
 
     const allowed = await scan({ massMissing: threshold, allowMassMissing: true });

@@ -5,6 +5,8 @@ import {
   type Credit,
   getAlbumOfFile,
   type NewArtwork,
+  pruneEmptyAlbums,
+  removeOtherSegments,
   setAlbumArtwork,
   upsertAlbum,
   upsertArtist,
@@ -31,8 +33,14 @@ import {
 import { rebuildSearchIndex } from '../db/search-index.ts';
 import type { AudioFileEntry, LibraryReader, WalkEvent } from '../fs/library-reader.ts';
 import { PathSafetyError, resolveInsideRoot } from '../fs/resolve-inside-root.ts';
-import { withCueSheet } from '../metadata/cue.ts';
-import { albumFolder, type CatalogRecord, toCatalogRecord } from '../metadata/map.ts';
+import {
+  type CueMatch,
+  cueSegments,
+  matchCueSheet,
+  type NamedCueSheet,
+  withCueSheet,
+} from '../metadata/cue.ts';
+import { albumFolder, type CatalogRecord, splitByCue, toCatalogRecord } from '../metadata/map.ts';
 
 export interface ScanDeps {
   readonly db: CatalogDb;
@@ -86,9 +94,6 @@ export interface ScanSummary {
 
 const MAX_REPORTED_PROBLEMS = 100;
 
-/** Files at least this long are checked for a CUE sheet even when tagged. */
-const CUE_IMAGE_MIN_SECONDS = 20 * 60;
-
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
 /**
@@ -138,7 +143,12 @@ async function realScan(
     reason: string | null,
   ): ScanSummary => {
     // Even a cancelled or failed scan may have written some tracks first.
-    if (counters.added + counters.updated > 0) rebuildSearchIndex(db);
+    // A full scan rewrites the tracks of unchanged files too, so counters
+    // alone cannot say whether anything changed.
+    if (context.wroteTracks) {
+      pruneEmptyAlbums(db);
+      rebuildSearchIndex(db);
+    }
     finishScan(db, scanId, {
       status,
       finishedAt: now(),
@@ -149,10 +159,12 @@ async function realScan(
   };
 
   const context: ScanContext = {
+    wroteTracks: false,
     rootId,
     scanId,
     mode: options.mode,
     folderArt: new Map(),
+    cueSheets: new Map(),
     artChecked: new Set(),
   };
   try {
@@ -211,11 +223,15 @@ async function realScan(
 }
 
 interface ScanContext {
+  /** Set once any file's tracks were (re)written during this scan. */
+  wroteTracks: boolean;
   readonly rootId: number;
   readonly scanId: number;
   readonly mode: ScanOptions['mode'];
   /** Folder artwork per directory, looked up once per scan. */
   readonly folderArt: Map<string, Promise<NewArtwork | null>>;
+  /** CUE sheets per directory, read once per scan. */
+  readonly cueSheets: Map<string, Promise<NamedCueSheet[]>>;
   /** Albums already checked for missing artwork during this scan. */
   readonly artChecked: Set<number>;
 }
@@ -254,18 +270,18 @@ async function processFile(
     scanId: ctx.scanId,
   };
 
-  let record: CatalogRecord;
+  let records: CatalogRecord[];
   let audioMd5: string | null;
   try {
     const read = await reader.readAudio(entry.relPath);
     let metadata = read.metadata;
-    // Untagged or disc-length files are usually single-file CD images: their
-    // album details live in the CUE sheet next to them.
-    if (!metadata.common.album || (metadata.format.duration ?? 0) >= CUE_IMAGE_MIN_SECONDS) {
-      const sheet = await reader.readCueSheetFor(entry.relPath).catch(() => null);
-      if (sheet) metadata = withCueSheet(metadata, sheet);
-    }
-    record = toCatalogRecord(metadata, entry.relPath);
+    // A CUE sheet fills album details the tags lack (single-file CD images
+    // are often untagged), and splits an image into its tracks.
+    const cue = await findCueSheet(deps, ctx, entry.relPath);
+    if (cue) metadata = withCueSheet(metadata, cue.sheet);
+    const record = toCatalogRecord(metadata, entry.relPath);
+    const segments = cue?.namesFile ? cueSegments(cue.sheet, record.track.durationMs) : null;
+    records = segments ? splitByCue(record, segments) : [record];
     audioMd5 = read.audioMd5;
   } catch (error) {
     // One unreadable file is recorded and skipped; it never stops the scan.
@@ -279,31 +295,40 @@ async function processFile(
   // Folder art (cover.jpg, folder.jpg, …) wins over embedded art: it is usually
   // the curated scan, and it gives every track of the album the same cover.
   // Written to the cache dir before the transaction; harmless if it rolls back.
+  const picture = records[0]?.picture ?? null;
   const artwork =
     (await findFolderArt(deps, ctx, entry.relPath)) ??
-    (record.picture ? storeArtwork(cacheDir, record.picture) : null);
+    (picture ? storeArtwork(cacheDir, picture) : null);
 
   db.transaction((tx) => {
     const file = upsertFile(tx, { ...fileBase, audioMd5, status: 'present', errorMessage: null });
     const artworkId = artwork ? upsertArtwork(tx, artwork) : null;
-    const albumArtistId = record.album.albumArtist
-      ? upsertArtist(tx, record.album.albumArtist)
-      : null;
-    const { albumArtist: _, ...album } = record.album;
-    const albumId = upsertAlbum(tx, { ...album, albumArtistId, artworkId });
-    const credits: Credit[] = [
-      ...record.artists.map((name) => ({
-        artistId: upsertArtist(tx, name),
-        role: 'artist' as const,
-      })),
-      ...record.composers.map((name) => ({
-        artistId: upsertArtist(tx, name),
-        role: 'composer' as const,
-      })),
-    ];
-    const genreIds = record.genres.map((name) => upsertGenre(tx, name));
-    upsertTrack(tx, { ...record.track, fileId: file.id, albumId, credits, genreIds });
+    for (const record of records) {
+      const albumArtistId = record.album.albumArtist
+        ? upsertArtist(tx, record.album.albumArtist)
+        : null;
+      const { albumArtist: _, ...album } = record.album;
+      const albumId = upsertAlbum(tx, { ...album, albumArtistId, artworkId });
+      const credits: Credit[] = [
+        ...record.artists.map((name) => ({
+          artistId: upsertArtist(tx, name),
+          role: 'artist' as const,
+        })),
+        ...record.composers.map((name) => ({
+          artistId: upsertArtist(tx, name),
+          role: 'composer' as const,
+        })),
+      ];
+      const genreIds = record.genres.map((name) => upsertGenre(tx, name));
+      upsertTrack(tx, { ...record.track, fileId: file.id, albumId, credits, genreIds });
+    }
+    removeOtherSegments(
+      tx,
+      file.id,
+      records.map((r) => r.track.segment),
+    );
   });
+  ctx.wroteTracks = true;
 
   countChange(existing, statUnchanged, counters);
 }
@@ -326,6 +351,22 @@ async function fillMissingArtwork(
   if (art) {
     deps.db.transaction((tx) => setAlbumArtwork(tx, album.albumId, upsertArtwork(tx, art)));
   }
+}
+
+/** The CUE sheet for an audio file, from the sheets in its folder. */
+async function findCueSheet(
+  deps: ScanDeps,
+  ctx: ScanContext,
+  relPath: string,
+): Promise<CueMatch | null> {
+  const dir = path.dirname(relPath) === '.' ? '' : path.dirname(relPath);
+  let pending = ctx.cueSheets.get(dir);
+  if (!pending) {
+    // An unreadable sheet means no sheet, not a failed file.
+    pending = deps.reader.readCueSheets(dir).catch(() => []);
+    ctx.cueSheets.set(dir, pending);
+  }
+  return matchCueSheet(await pending, path.basename(relPath));
 }
 
 function findFolderArt(

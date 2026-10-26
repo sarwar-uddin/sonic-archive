@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { type IAudioMetadata, parseFile } from 'music-metadata';
 import { assertInsideTestSandbox } from '../config/sandbox.ts';
-import { type CueSheet, decodeCueBytes, parseCueSheet } from '../metadata/cue.ts';
+import { decodeCueBytes, type NamedCueSheet, parseCueSheet } from '../metadata/cue.ts';
 import { FLAC_HEADER_BYTES, flacAudioMd5 } from '../metadata/flac-md5.ts';
 import { ART_SUBFOLDERS, chooseFolderArtwork, IMAGE_EXTENSIONS } from '../metadata/folder-art.ts';
 import { resolveInsideRoot } from './resolve-inside-root.ts';
@@ -76,11 +76,8 @@ export interface LibraryReader {
   findFolderArtwork(relDir: string): Promise<string | null>;
   /** Reads an image file, or returns null if it is larger than `maxBytes`. */
   readImage(relPath: string, maxBytes: number): Promise<Uint8Array | null>;
-  /**
-   * The CUE sheet next to an audio file that names it in a FILE line (or the
-   * only sheet in the folder), parsed; null if there is none.
-   */
-  readCueSheetFor(relPath: string): Promise<CueSheet | null>;
+  /** Every CUE sheet in `relDir`, parsed, in name order. */
+  readCueSheets(relDir: string): Promise<NamedCueSheet[]>;
 }
 
 /** CUE sheets are a few KB; anything far larger is not one. */
@@ -201,11 +198,9 @@ export function createLibraryReader(root: string): LibraryReader {
     return readHeader(absolute, st.size);
   }
 
-  async function readCueSheetFor(relPath: string): Promise<CueSheet | null> {
-    const relDir = path.dirname(relPath) === '.' ? '' : path.dirname(relPath);
+  async function readCueSheets(relDir: string): Promise<NamedCueSheet[]> {
     const dir = resolveInsideRoot(canonicalRoot, relDir);
-    const audioName = path.basename(relPath).toLowerCase();
-    const sheets: CueSheet[] = [];
+    const sheets: NamedCueSheet[] = [];
     for (const entry of await readSortedDir(dir)) {
       if (
         !entry.isFile() ||
@@ -215,16 +210,10 @@ export function createLibraryReader(root: string): LibraryReader {
         continue;
       }
       const bytes = await readImage(path.join(relDir, entry.name), MAX_CUE_BYTES);
-      if (bytes === null) continue;
-      const sheet = parseCueSheet(decodeCueBytes(bytes));
-      if (
-        sheet.files.some((f) => path.basename(f.replaceAll('\\', '/')).toLowerCase() === audioName)
-      ) {
-        return sheet;
-      }
-      sheets.push(sheet);
+      if (bytes !== null)
+        sheets.push({ name: entry.name, sheet: parseCueSheet(decodeCueBytes(bytes)) });
     }
-    return sheets.length === 1 ? (sheets[0] ?? null) : null;
+    return sheets;
   }
 
   return {
@@ -234,7 +223,7 @@ export function createLibraryReader(root: string): LibraryReader {
     readAudio,
     findFolderArtwork,
     readImage,
-    readCueSheetFor,
+    readCueSheets,
   };
 }
 

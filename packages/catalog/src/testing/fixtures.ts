@@ -11,7 +11,10 @@ import { TEST_FIXTURES_DIR } from '../config/sandbox.ts';
 export const FIXTURE_LIBRARY = path.join(TEST_FIXTURES_DIR, 'library');
 
 /** Audio files the scanner should see in the fixture library (hidden ones excluded). */
-export const FIXTURE_AUDIO_COUNT = 17;
+export const FIXTURE_AUDIO_COUNT = 19;
+
+/** Tracks after a scan: every readable file, with the two CD images split by their CUE sheets (3 + 2). */
+export const FIXTURE_TRACK_COUNT = FIXTURE_AUDIO_COUNT - 1 + 3;
 
 export interface LibraryCopy {
   /** Canonical path of the copied library root. */

@@ -80,7 +80,17 @@ function TrackRow({ track, albumArtist }: { track: TrackSummary; albumArtist: st
           <dd>{track.container ?? '—'}</dd>
           <dt>Bitrate</dt>
           <dd>{formatBitrate(track.bitrate)}</dd>
-          <dt>File size</dt>
+          {track.span && (
+            <>
+              <dt>Position</dt>
+              <dd>
+                {formatDuration(track.span.startMs)} –{' '}
+                {track.span.endMs === null ? 'end' : formatDuration(track.span.endMs)} of the CD
+                image, by its CUE sheet
+              </dd>
+            </>
+          )}
+          <dt>{track.span ? 'Image size' : 'File size'}</dt>
           <dd>{formatBytes(track.file.size)}</dd>
           {track.artists.length > 0 && (
             <>
