@@ -15,6 +15,7 @@ mise install
 pnpm install
 pnpm check      # typecheck + lint + tests
 pnpm paths      # show where config, database and cache live
+pnpm db:migrate # create or upgrade the catalog database (backs up first)
 ```
 
 ## Layout
@@ -25,7 +26,17 @@ pnpm paths      # show where config, database and cache live
 | `apps/server`      | CLI now; Express API from M3                     |
 | `docs/adr`         | Architecture decision records                    |
 
+## Changing the database schema
+
+1. Edit `packages/catalog/src/db/schema.ts`.
+2. Run `pnpm --filter @sonic-archive/catalog db:generate --name <what-changed>`.
+3. Read the generated SQL in `packages/catalog/drizzle/`. If it contains
+   `DROP` or `DELETE`, confirm that no data is lost, then add
+   `-- safety-reviewed: <reason>` to that statement. Otherwise tests fail and
+   the runner refuses to apply it.
+4. `pnpm check`, then commit the schema, SQL, and `meta/` together.
+
 ## Status
 
-Milestone **M0 (foundation)** is complete. The next milestone is M1: the
-database schema and migrations.
+Milestones **M0 (foundation)** and **M1 (database)** are complete. The next
+milestone is M2: the scanner, tested on synthetic audio fixtures.

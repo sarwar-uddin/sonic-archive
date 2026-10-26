@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "pnpm typecheck && pnpm lint && pnpm test",
-    "paths": "node apps/server/src/cli.ts paths"
+    "paths": "node apps/server/src/cli.ts paths",
+    "db:migrate": "node apps/server/src/cli.ts migrate"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.3",

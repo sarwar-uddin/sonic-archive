@@ -25,8 +25,13 @@ Use **better-sqlite3** with **drizzle-orm 0.45.x** and **drizzle-kit**.
 
 ## Consequences
 
-- It is a native dependency. pnpm 12 blocks dependency build scripts by
-  default, so it must be listed under `allowBuilds` in `pnpm-workspace.yaml`.
-  gcc/make/python3 are installed in case no prebuilt binary matches.
+- It is a native dependency, but version 13 ships N-API prebuilt binaries
+  inside the npm package and has **no install script**, so pnpm needs no
+  build approval for it. (Verified in M1. gcc/make/python3 remain available
+  for a source build.)
+- drizzle-kit pulls in esbuild, whose install script only optimizes its
+  binary. It is explicitly denied (`allowBuilds: { esbuild: false }`), and
+  drizzle-kit works without it, so the project runs no dependency install
+  scripts at all.
 - Revisit when Drizzle 1.0 is stable. Switching to `node:sqlite` would then
   remove the native dependency.
