@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import { type FormEvent, useEffect, useRef } from 'react';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { api } from '../lib/api.ts';
 import { formatBytes } from '../lib/format.ts';
+import { CommandPalette, isTyping } from './CommandPalette.tsx';
 import styles from './Layout.module.css';
 
 const NAV = [
@@ -20,6 +21,20 @@ export function Layout() {
   });
   const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
+  const [palette, setPalette] = useState(false);
+
+  // "/" (outside text fields) or Ctrl/⌘-K opens the search palette.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const commandK = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k';
+      if (commandK || (event.key === '/' && !isTyping(event.target))) {
+        event.preventDefault();
+        setPalette(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // Move focus to the page on navigation so screen readers announce it.
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs on route change by design
@@ -46,7 +61,7 @@ export function Layout() {
               <span>{formatBytes(stats.totalBytes)}</span>
             </p>
           )}
-          <SearchBox />
+          <SearchBox onPalette={() => setPalette(true)} />
         </div>
         <nav aria-label="Sections" className={styles.nav}>
           {NAV.map((item) => (
@@ -66,6 +81,7 @@ export function Layout() {
       <main id="main" ref={mainRef} tabIndex={-1} className={styles.main}>
         <Outlet />
       </main>
+      {palette && <CommandPalette onClose={() => setPalette(false)} />}
       <footer className={styles.footer}>
         <p className="kicker">Read-only archive · Nothing leaves this machine</p>
       </footer>
@@ -73,7 +89,7 @@ export function Layout() {
   );
 }
 
-function SearchBox() {
+function SearchBox({ onPalette }: { onPalette: () => void }) {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const location = useLocation();
@@ -106,6 +122,15 @@ function SearchBox() {
         autoComplete="off"
         maxLength={200}
       />
+      <button
+        type="button"
+        className={styles.paletteHint}
+        onClick={onPalette}
+        aria-label="Open quick search (Ctrl K)"
+        title="Quick search: press / or Ctrl K"
+      >
+        <kbd>/</kbd>
+      </button>
     </form>
   );
 }

@@ -78,6 +78,43 @@
   border-color: var(--rule-strong);
 }
 
+/* The "/" key cap inside the search box opens the quick-search palette. */
+.search {
+  position: relative;
+}
+
+.search input {
+  padding-right: 40px;
+}
+
+.paletteHint {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  translate: 0 -50%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.paletteHint kbd {
+  display: block;
+  min-width: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--rule-strong);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 18px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.paletteHint:hover kbd {
+  border-color: var(--paper);
+  color: var(--paper);
+}
+
 .nav {
   max-width: var(--measure);
   margin: 0 auto;

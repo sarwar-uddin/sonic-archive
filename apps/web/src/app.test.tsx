@@ -293,6 +293,70 @@ describe('search', () => {
   });
 });
 
+describe('search palette', () => {
+  const searchApi = (url: URL) => ({
+    albums: url.searchParams.get('q') === 'basalt' ? [albumSummary] : [],
+    artists: [{ id: 1, name: 'Basalt Quartet', albumCount: 1, trackCount: 3, artworkIds: [] }],
+    tracks: [],
+  });
+
+  it('opens with "/", searches as you type, and jumps with the keyboard', async () => {
+    mockApi({
+      stats,
+      albums: page([albumSummary]),
+      facets,
+      search: searchApi,
+      'albums/7': albumDetail,
+    });
+    const { router } = renderApp('/');
+    await screen.findByRole('heading', { level: 1 });
+
+    await userEvent.keyboard('/');
+    const palette = within(screen.getByRole('dialog', { name: 'Search and jump' }));
+    const input = palette.getByRole('combobox');
+    expect(input).toHaveFocus();
+    // Before typing: the pages.
+    expect(palette.getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'CollectionPage',
+      'ArtistsPage',
+      'TracksPage',
+      'HealthPage',
+      'LedgerPage',
+    ]);
+
+    await userEvent.type(input, 'basalt');
+    expect(await palette.findByRole('option', { name: /Hi-Res Session/ })).toBeInTheDocument();
+    expect(palette.getByRole('option', { name: /^Basalt Quartet1 album/ })).toBeInTheDocument();
+    expect(
+      palette.getByRole('option', { name: /See all results for “basalt”/ }),
+    ).toBeInTheDocument();
+
+    // The first option is highlighted; Enter opens it.
+    expect(palette.getAllByRole('option')[0]).toHaveAttribute('aria-selected', 'true');
+    await userEvent.keyboard('{Enter}');
+    expect(router.state.location.pathname).toBe('/albums/7');
+    expect(screen.queryByRole('dialog', { name: 'Search and jump' })).not.toBeInTheDocument();
+  });
+
+  it('opens with Ctrl-K even from a text field, but "/" there just types', async () => {
+    mockApi({ stats, albums: page([albumSummary]), facets, search: searchApi });
+    renderApp('/');
+    const box = await screen.findByRole('searchbox', { name: 'Search the collection' });
+    await userEvent.type(box, 'a/b');
+    expect(box).toHaveValue('a/b');
+    expect(screen.queryByRole('dialog', { name: 'Search and jump' })).not.toBeInTheDocument();
+
+    await userEvent.keyboard('{Control>}k{/Control}');
+    const palette = within(screen.getByRole('dialog', { name: 'Search and jump' }));
+    await userEvent.type(palette.getByRole('combobox'), 'led');
+    await userEvent.keyboard('{ArrowDown}{ArrowUp}');
+    expect(palette.getByRole('option', { name: /Ledger/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
+});
+
 describe('groupByInitial', () => {
   it('folds accents, keeps other scripts, and puts symbols last', () => {
     const names = ['Ísold', 'iron maiden', 'Дискография', '2Pac', 'Àbba', 'Opeth'];

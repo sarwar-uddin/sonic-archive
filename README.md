@@ -60,7 +60,7 @@ All endpoints are `GET`, return JSON, and address resources by numeric id.
 
 ## Status
 
-Milestones **M0–M10** are complete, plus a collection-led redesign: the
+Milestones **M0–M11** are complete, plus a collection-led redesign: the
 library has been scanned in full (read-only; verified unchanged afterwards).
 Covers come from folder scans (JPEG/PNG/TIFF) and are served as WebP
 thumbnails. Single-file CD images are split into their tracks by their CUE
@@ -77,5 +77,6 @@ album gets a verdict, and the full log can be read in the app.
 Pressings of one album (same artist and title, different folders) are
 compared side by side on the album page.
 
-Next: grouping pressings of one album, a search
-palette, and a statistics page.
+Press `/` or Ctrl-K anywhere for a quick-search palette.
+
+Next: a statistics page.
