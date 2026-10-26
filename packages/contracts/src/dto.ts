@@ -103,6 +103,10 @@ export interface TrackSummary {
    */
   readonly span: { readonly startMs: number; readonly endMs: number | null } | null;
   readonly file: {
+    /** For streaming: `/api/files/:id/audio`. */
+    readonly id: number;
+    /** `direct`: sent as stored, seekable. `transcode`: converted to FLAC while it plays. */
+    readonly playback: 'direct' | 'transcode';
     /** Relative to the library root. Informational; the API never accepts paths. */
     readonly relPath: string;
     readonly size: number;

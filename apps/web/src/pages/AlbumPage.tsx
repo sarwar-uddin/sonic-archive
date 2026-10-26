@@ -18,7 +18,9 @@ import {
   plural,
   shortCodec,
 } from '../lib/format.ts';
+import { toQueueItem } from '../lib/player.ts';
 import { useDocumentTitle } from '../lib/use-document-title.ts';
+import { usePlayer } from '../lib/use-player.tsx';
 import styles from './AlbumPage.module.css';
 import { NotFoundPage } from './NotFoundPage.tsx';
 
@@ -51,6 +53,25 @@ export function AlbumView({ album }: { readonly album: AlbumDetail }) {
     album.discs.filter((d) => d.discNo !== null).length,
   );
   const fromImage = album.discs.some((d) => d.tracks.some((t) => t.span !== null));
+
+  const [playerState, player] = usePlayer();
+  const playable = album.discs.flatMap((d) => d.tracks).filter((t) => t.file.status === 'present');
+  const queue = playable.map((t) =>
+    toQueueItem(t, { id: album.id, title: album.title, artworkId: album.artworkId }),
+  );
+  const playFrom = (trackId: number) =>
+    player.play(
+      queue,
+      Math.max(
+        0,
+        queue.findIndex((q) => q.trackId === trackId),
+      ),
+    );
+  const currentItem = playerState.queue[playerState.index];
+  const nowPlaying =
+    currentItem && currentItem.albumId === album.id
+      ? { trackId: currentItem.trackId, playing: playerState.playing }
+      : null;
 
   return (
     <article>
@@ -98,6 +119,23 @@ export function AlbumView({ album }: { readonly album: AlbumDetail }) {
                   ))}
               </ul>
             )}
+            {queue.length > 0 && (
+              <p className={styles.actions}>
+                <button
+                  type="button"
+                  className={styles.playAlbum}
+                  onClick={() => (nowPlaying ? player.toggle() : player.play(queue, 0))}
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                    <path
+                      d={nowPlaying?.playing ? 'M7 5h4v14H7zM13 5h4v14h-4z' : 'M8 5v14l11-7z'}
+                      fill="currentColor"
+                    />
+                  </svg>
+                  {nowPlaying?.playing ? 'Pause' : nowPlaying ? 'Resume' : 'Play album'}
+                </button>
+              </p>
+            )}
             <p className={`mono ${styles.facts}`}>
               <span className={`tag ${hiRes ? 'tag-hires' : ''}`}>{format}</span>
               <span>{plural(album.trackCount, 'track')}</span>
@@ -140,7 +178,12 @@ export function AlbumView({ album }: { readonly album: AlbumDetail }) {
           <h2 id="tracklist-heading" className={styles.sectionTitle}>
             Tracklist
           </h2>
-          <TrackList discs={album.discs} albumArtist={artist} />
+          <TrackList
+            discs={album.discs}
+            albumArtist={artist}
+            onPlay={(track) => playFrom(track.id)}
+            nowPlaying={nowPlaying}
+          />
         </section>
 
         <aside className={styles.specSheet} aria-labelledby="spec-heading">

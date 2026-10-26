@@ -32,10 +32,31 @@ describe('album page', () => {
     const disc1 = within(screen.getByRole('region', { name: 'Disc 1' }));
     const rows = disc1.getAllByRole('button', { expanded: false });
     expect(rows.map((r) => r.textContent)).toEqual([
-      expect.stringMatching(/^1Overture24\/964:05$/),
-      expect.stringMatching(/^2InterludeGuest Cellist24\/964:05$/),
+      expect.stringMatching(/^Overture24\/964:05$/),
+      expect.stringMatching(/^InterludeGuest Cellist24\/964:05$/),
     ]);
+    // The number sits on each row's play button.
+    expect(disc1.getByRole('button', { name: 'Play Overture' })).toHaveTextContent('1');
     // Row 1 omits its artist (same as the album artist); row 2 shows its guest.
+  });
+
+  it('plays the album, or from a chosen track, in the player bar', async () => {
+    mockApi({ 'albums/7': albumDetail, stats });
+    renderApp('/albums/7');
+    await userEvent.click(await screen.findByRole('button', { name: 'Play album' }));
+    const bar = within(screen.getByRole('region', { name: 'Player' }));
+    expect(bar.getByText('Overture')).toBeInTheDocument();
+    // Coda's file is missing, so it is left out of the queue.
+    expect(bar.getByText('1 / 2')).toBeInTheDocument();
+    expect(bar.getByRole('button', { name: 'Pause' })).toBeInTheDocument();
+    // The album's own button follows the player.
+    expect(screen.getAllByRole('button', { name: 'Pause' })).toHaveLength(2);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Play Interlude' }));
+    expect(bar.getByText('Interlude')).toBeInTheDocument();
+    expect(bar.getByText('2 / 2')).toBeInTheDocument();
+    expect(bar.getByRole('button', { name: 'Next track' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Play Coda' })).not.toBeInTheDocument();
   });
 
   it('shows a spec sheet with full and compact resolution', async () => {

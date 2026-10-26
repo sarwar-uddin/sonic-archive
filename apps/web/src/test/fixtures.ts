@@ -19,6 +19,8 @@ export function track(overrides: Partial<TrackSummary> & { id: number }): TrackS
     hasEmbeddedArt: false,
     span: null,
     file: {
+      id: 100 + (overrides.id ?? 0),
+      playback: 'direct',
       relPath: `Basalt/${overrides.id}.flac`,
       size: 40_000_000,
       status: 'present',
@@ -75,6 +77,8 @@ export const albumDetail: AlbumDetail = {
           sampleRate: 44_100,
           bitDepth: 16,
           file: {
+            id: 103,
+            playback: 'transcode',
             relPath: 'Basalt/CD2/01 Coda.m4a',
             size: 30_000_000,
             status: 'missing',

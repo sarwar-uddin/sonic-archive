@@ -1,11 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { CatalogQueries } from '@sonic-archive/catalog';
+import type { CatalogQueries, LibraryReader } from '@sonic-archive/catalog';
 import {
   type ApiError,
   albumListQuery,
   artistListQuery,
   artworkQuery,
+  audioQuery,
   type Health,
   type HealthReport,
   idParams,
@@ -16,6 +17,7 @@ import {
 import express, { type ErrorRequestHandler, type Request, type Response } from 'express';
 import { ZodError, type z } from 'zod';
 import { createArtworkRenderer } from './artwork.ts';
+import { parseRange, type Transcoder } from './audio.ts';
 import {
   apiContentSecurityPolicy,
   hostGuard,
@@ -33,6 +35,10 @@ export interface AppDeps {
   readonly artworkDir: string;
   /** Canonical library root, or null when unconfigured. Only ever stat'ed. */
   readonly libraryRoot: string | null;
+  /** Read-only access to audio for playback; null when no library is configured. */
+  readonly library?: Pick<LibraryReader, 'audioFile' | 'readAudioRange'> | null;
+  /** Converts formats browsers cannot play; without it they are not playable. */
+  readonly transcoder?: Transcoder;
   /** Built web app to serve at `/` (production); omitted in development. */
   readonly webDist?: string;
   readonly allowedHostnames?: ReadonlySet<string>;
@@ -84,6 +90,55 @@ export function createApp(deps: AppDeps): express.Express {
 
   api.get('/albums/:id', (req, res) => {
     res.json(found(queries.getAlbum(parse(idParams, req.params).id)));
+  });
+
+  // Playback. Files are addressed by catalog id only; the stored path is
+  // re-checked inside the library root by the reader before any read.
+  api.get('/files/:id/audio', async (req, res, next) => {
+    const file = found(queries.getAudioFile(parse(idParams, req.params).id));
+    const { start } = parse(audioQuery, req.query);
+    if (!deps.library) throw new NotFound();
+    let size: number;
+    let absolute: string;
+    try {
+      ({ size, absolute } = await deps.library.audioFile(file.relPath));
+    } catch {
+      throw new NotFound();
+    }
+    res.setHeader('Cache-Control', 'no-store');
+
+    if (file.playback.mode === 'transcode') {
+      const stream = deps.transcoder?.stream(absolute, start ?? 0, file.codec) ?? null;
+      if (stream === null) {
+        res.status(503).json({ error: { code: 'BUSY', message: 'Too many conversions at once.' } });
+        return;
+      }
+      res.type('audio/flac');
+      res.setHeader('Accept-Ranges', 'none');
+      res.on('close', () => stream.destroy());
+      stream.pipe(res);
+      return;
+    }
+
+    const range = parseRange(req.headers.range, size);
+    if (range === 'invalid') {
+      res.status(416).setHeader('Content-Range', `bytes */${size}`).end();
+      return;
+    }
+    const { start: from, end: to } = range ?? { start: 0, end: size - 1 };
+    res.status(range ? 206 : 200);
+    res.type(file.playback.mime);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Content-Length', String(size === 0 ? 0 : to - from + 1));
+    if (range) res.setHeader('Content-Range', `bytes ${from}-${to}/${size}`);
+    if (req.method === 'HEAD' || size === 0) {
+      res.end();
+      return;
+    }
+    const stream = await deps.library.readAudioRange(file.relPath, from, to);
+    stream.on('error', (error) => (res.headersSent ? res.destroy(error) : next(error)));
+    res.on('close', () => stream.destroy());
+    stream.pipe(res);
   });
 
   api.get('/statistics', (_req, res) => {

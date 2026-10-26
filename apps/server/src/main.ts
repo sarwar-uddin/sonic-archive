@@ -4,11 +4,13 @@ import {
   ARTWORK_SUBDIR,
   buildHealthReport,
   createCatalogQueries,
+  createLibraryReader,
   loadConfig,
   migrateCatalog,
   openCatalogDatabase,
 } from '@sonic-archive/catalog';
 import { createApp } from './app.ts';
+import { createTranscoder } from './audio.ts';
 
 /** Never configurable: the server only ever listens on loopback (docs/safety.md, #6). */
 const HOST = '127.0.0.1';
@@ -35,6 +37,10 @@ const app = createApp({
   healthReport: () => buildHealthReport(database.sqlite),
   artworkDir: path.join(dirs.cacheDir, ARTWORK_SUBDIR),
   libraryRoot: library.status === 'configured' ? library.root : null,
+  // Playback reads library files through the same read-only reader the
+  // scanner uses (docs/safety.md).
+  library: library.status === 'configured' ? createLibraryReader(library.root) : null,
+  transcoder: createTranscoder(),
   ...(webDist !== undefined && { webDist: path.resolve(webDist) }),
 });
 

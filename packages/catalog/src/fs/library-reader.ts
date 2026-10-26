@@ -85,6 +85,14 @@ export interface LibraryReader {
   listFiles(relDir: string, options: ListFilesOptions): Promise<FileEntry[]>;
   /** Reads a small text file (a rip log), or returns null if larger than `maxBytes`. */
   readSmallFile(relPath: string, maxBytes: number): Promise<Uint8Array | null>;
+  /**
+   * Checks that `relPath` is a regular audio file inside the root, for
+   * playback. Returns its canonical absolute path (for a decoder that only
+   * reads it) and size.
+   */
+  audioFile(relPath: string): Promise<{ absolute: string; size: number }>;
+  /** A read-only stream of bytes `start`..`end` (inclusive) of an audio file. */
+  readAudioRange(relPath: string, start: number, end: number): Promise<fs.ReadStream>;
   /** Every CUE sheet in `relDir`, parsed, in name order. */
   readCueSheets(relDir: string): Promise<NamedCueSheet[]>;
 }
@@ -247,6 +255,23 @@ export function createLibraryReader(root: string): LibraryReader {
     return found;
   }
 
+  async function audioFile(relPath: string): Promise<{ absolute: string; size: number }> {
+    if (!AUDIO_EXTENSIONS.has(path.extname(relPath).toLowerCase())) {
+      throw new Error('Not an audio file.');
+    }
+    // resolveInsideRoot follows symlinks and refuses any that lead outside.
+    const absolute = resolveInsideRoot(canonicalRoot, relPath);
+    const st = await fs.promises.stat(absolute);
+    if (!st.isFile()) throw new Error('Not a regular file.');
+    return { absolute, size: st.size };
+  }
+
+  async function readAudioRange(relPath: string, start: number, end: number) {
+    const { absolute } = await audioFile(relPath);
+    // createReadStream opens with flags 'r': read-only.
+    return fs.createReadStream(absolute, { start, end });
+  }
+
   async function readCueSheets(relDir: string): Promise<NamedCueSheet[]> {
     const dir = resolveInsideRoot(canonicalRoot, relDir);
     const sheets: NamedCueSheet[] = [];
@@ -274,6 +299,8 @@ export function createLibraryReader(root: string): LibraryReader {
     readImage,
     listFiles,
     readSmallFile: readImage,
+    audioFile,
+    readAudioRange,
     readCueSheets,
   };
 }

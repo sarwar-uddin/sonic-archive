@@ -179,3 +179,14 @@
     gap: 10px;
   }
 }
+
+/* Room for the player bar at the bottom of every page. */
+.shell[data-player] {
+  padding-bottom: 76px;
+}
+
+@media (max-width: 760px) {
+  .shell[data-player] {
+    padding-bottom: 96px;
+  }
+}

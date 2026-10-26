@@ -39,6 +39,7 @@ import { albumRipVerdict, logDisc, parseRipLog } from '../metadata/rip-log.ts';
 import { classifyScan, compareScans } from '../metadata/scans.ts';
 import { workKey } from '../metadata/work.ts';
 import { nameKey } from '../text/normalize.ts';
+import { type Playback, playbackOf } from './playback.ts';
 
 type Row = Record<string, unknown>;
 type Param = string | number | null;
@@ -87,7 +88,8 @@ const ALBUM_SORT_SQL: Record<AlbumListQuery['sort'], (dir: string) => string> = 
 const TRACK_COLUMNS = `
   t.id, t.title, t.display_artist, t.track_no, t.disc_no, t.year, t.duration_ms, t.codec,
   t.container, t.lossless, t.sample_rate, t.bit_depth, t.channels, t.bitrate,
-  t.has_embedded_art, t.start_ms, t.end_ms, t.segment, f.rel_path, f.size, f.status, f.audio_md5`;
+  t.has_embedded_art, t.start_ms, t.end_ms, t.segment, f.id AS file_id, f.rel_path, f.size, f.status,
+  f.audio_md5`;
 
 const TRACK_SORT_SQL: Record<TrackListQuery['sort'], (dir: string) => string> = {
   artist: (d) =>
@@ -114,6 +116,8 @@ export interface CatalogQueries {
   lastScan(): ScanRecord | null;
   getArtwork(id: number): { cacheFile: string; mime: string } | null;
   getRipLog(id: number): RipLogText | null;
+  /** A present audio file to stream, with how to stream it. */
+  getAudioFile(id: number): { relPath: string; playback: Playback; codec: string | null } | null;
   /** Rip verdict per album that has logs. */
   ripVerdicts(): ReadonlyMap<number, RipVerdict>;
 }
@@ -739,6 +743,17 @@ export function createCatalogQueries(sqlite: Database.Database): CatalogQueries 
       };
     },
     ripVerdicts,
+    getAudioFile: (id) => {
+      const row = get(
+        `SELECT f.rel_path, (SELECT t.codec FROM tracks t WHERE t.file_id = f.id LIMIT 1) AS codec
+         FROM files f WHERE f.id = ? AND f.status = 'present'`,
+        [id],
+      );
+      if (!row) return null;
+      const relPath = String(row.rel_path);
+      const codec = nullableString(row.codec);
+      return { relPath, codec, playback: playbackOf(relPath, codec) };
+    },
     getArtwork: (id) => {
       const row = get('SELECT cache_file, mime FROM artwork WHERE id = ?', [id]);
       return row ? { cacheFile: String(row.cache_file), mime: String(row.mime) } : null;
@@ -798,6 +813,8 @@ function toTrackSummary(row: Row, credits: Map<number, ArtistRef[]>): TrackSumma
         ? null
         : { startMs: Number(row.start_ms), endMs: nullableNumber(row.end_ms) },
     file: {
+      id: Number(row.file_id),
+      playback: playbackOf(String(row.rel_path), nullableString(row.codec)).mode,
       relPath: String(row.rel_path),
       size: Number(row.size),
       status: row.status as TrackSummary['file']['status'],

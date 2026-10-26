@@ -39,6 +39,25 @@ capped at 2 MB, decoded to text and stored in the catalog database, so the
 app can show them without reading the library again. Only files that parse
 as rip logs are kept.
 
+## Playback (M13)
+
+Playing music is the one time the **API server** reads library files; until
+M13 only the scanner did. The same rules hold:
+
+- Read-only: files are opened through the library reader only (read
+  streams, flag `r`); nothing in the library is ever written.
+- No paths from the network: `GET /api/files/:id/audio` takes a catalog id.
+  The stored path is re-checked by `resolveInsideRoot` (no `..`, no symlink
+  leading outside the root) and must be a regular audio file.
+- Formats browsers cannot play (ALAC, APE, WavPack, DSD, AIFF) are decoded
+  by `ffmpeg`, spawned without a shell, with exactly one input (the library
+  file, as a `file:` URL with `-protocol_whitelist file`) and one output
+  (`pipe:1` to the server). Nothing is written to disk; at most three
+  conversions run at once. The arguments are unit-tested (`audio.test.ts`).
+  This code lives in the server, outside the library-facing modules that the
+  static read-only test scans for process spawning.
+- Bound to 127.0.0.1 with the Host allowlist, like every other endpoint.
+
 ## Configuring the library (do this only at milestone M2.5)
 
 ```jsonc

@@ -103,3 +103,29 @@ describe('readAudio', () => {
     await expect(reader.readAudio('../outside/x.flac')).rejects.toThrow(/outside the library/);
   });
 });
+
+describe('audio for playback', () => {
+  const FLAC = 'Aurora Field/Northern Lines (2001)/01 First Light.flac';
+
+  it('reads a byte range of an audio file', async () => {
+    const reader = createLibraryReader(lib.root);
+    const { size } = await reader.audioFile(FLAC);
+    expect(size).toBe(fs.statSync(path.join(lib.root, FLAC)).size);
+    const chunks: Buffer[] = [];
+    for await (const chunk of await reader.readAudioRange(FLAC, 0, 3)) chunks.push(chunk as Buffer);
+    expect(Buffer.concat(chunks).toString('latin1')).toBe('fLaC');
+  });
+
+  it('refuses non-audio files, folders, escapes and links leading outside', async () => {
+    const reader = createLibraryReader(lib.root);
+    fs.writeFileSync(path.join(lib.outside, 'secret.flac'), 'x');
+    fs.symlinkSync(path.join(lib.outside, 'secret.flac'), path.join(lib.root, 'link.flac'));
+    await expect(
+      reader.audioFile('Aurora Field/Northern Lines (2001)/notes.txt'),
+    ).rejects.toThrow();
+    await expect(reader.audioFile('Aurora Field')).rejects.toThrow();
+    await expect(reader.audioFile('../outside/secret.flac')).rejects.toThrow();
+    await expect(reader.audioFile('link.flac')).rejects.toThrow();
+    await expect(reader.readAudioRange('../outside/secret.flac', 0, 0)).rejects.toThrow();
+  });
+});

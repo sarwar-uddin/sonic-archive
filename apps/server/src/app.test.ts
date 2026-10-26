@@ -36,6 +36,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from './app.ts';
 import { renderScanCopy } from './artwork.ts';
+import { createTranscoder } from './audio.ts';
 
 let catalog: TempCatalog;
 let lib: LibraryCopy;
@@ -63,6 +64,8 @@ beforeAll(async () => {
     healthReport: () => buildHealthReport(reader.sqlite),
     artworkDir: path.join(cacheDir, ARTWORK_SUBDIR),
     libraryRoot: lib.root,
+    library: createLibraryReader(lib.root),
+    transcoder: createTranscoder(),
   });
 });
 
@@ -574,6 +577,91 @@ describe('GET /api/health-report', () => {
         notes: ['Ember - Live Image 2.accurip: 2 of 2 tracks differ from AccurateRip'],
       },
     ]);
+  });
+});
+
+describe('GET /api/files/:id/audio', () => {
+  async function fileOf(title: string) {
+    const res = await api(`/api/tracks?q=${encodeURIComponent(title)}`);
+    const track = (res.body as Page<TrackListItem>).items.find((t) => t.title === title);
+    if (!track) throw new Error(`No track ${title}`);
+    return track.file;
+  }
+  const bytes = (relPath: string) => fs.readFileSync(path.join(lib.root, relPath));
+  const binary = (req: request.Test) =>
+    req.buffer(true).parse((res, done) => {
+      const chunks: Buffer[] = [];
+      res.on('data', (c: Buffer) => chunks.push(c));
+      res.on('end', () => done(null, Buffer.concat(chunks)));
+    });
+
+  it('streams a FLAC file as stored, with byte ranges for seeking', async () => {
+    const file = await fileOf('Polar Night');
+    expect(file.playback).toBe('direct');
+    const whole = await binary(api(`/api/files/${file.id}/audio`));
+    expect(whole.status).toBe(200);
+    expect(whole.headers['content-type']).toBe('audio/flac');
+    expect(whole.headers['accept-ranges']).toBe('bytes');
+    expect(Buffer.compare(whole.body, bytes(file.relPath))).toBe(0);
+
+    const part = await binary(api(`/api/files/${file.id}/audio`).set('Range', 'bytes=4-15'));
+    expect(part.status).toBe(206);
+    expect(part.headers['content-range']).toBe(`bytes 4-15/${file.size}`);
+    expect(Buffer.compare(part.body, bytes(file.relPath).subarray(4, 16))).toBe(0);
+
+    const beyond = await api(`/api/files/${file.id}/audio`).set('Range', `bytes=${file.size}-`);
+    expect(beyond.status).toBe(416);
+    expect(beyond.headers['content-range']).toBe(`bytes */${file.size}`);
+  });
+
+  it('converts formats browsers cannot play to FLAC while streaming', async () => {
+    const file = await fileOf('Coda'); // ALAC in .m4a
+    expect(file.playback).toBe('transcode');
+    const res = await binary(api(`/api/files/${file.id}/audio?start=0.1`));
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('audio/flac');
+    expect(res.body.subarray(0, 4).toString('latin1')).toBe('fLaC');
+  });
+
+  it('answers 503 when too many conversions run, and 404 for a vanished file', async () => {
+    const busy = createApp({
+      queries: createCatalogQueries(reader.sqlite),
+      healthReport: () => buildHealthReport(reader.sqlite),
+      artworkDir: path.join(cacheDir, ARTWORK_SUBDIR),
+      libraryRoot: lib.root,
+      library: {
+        audioFile: async () => ({ absolute: '/nowhere', size: 1 }),
+        readAudioRange: async () => {
+          throw new Error('unused');
+        },
+      },
+      transcoder: { stream: () => null },
+    });
+    const coda = await fileOf('Coda');
+    expect((await request(busy).get(`/api/files/${coda.id}/audio`)).status).toBe(503);
+
+    const gone = createApp({
+      queries: createCatalogQueries(reader.sqlite),
+      healthReport: () => buildHealthReport(reader.sqlite),
+      artworkDir: path.join(cacheDir, ARTWORK_SUBDIR),
+      libraryRoot: lib.root,
+      library: {
+        audioFile: async () => {
+          throw new Error('ENOENT');
+        },
+        readAudioRange: async () => {
+          throw new Error('unused');
+        },
+      },
+    });
+    expect((await request(gone).get(`/api/files/${coda.id}/audio`)).status).toBe(404);
+  });
+
+  it('refuses unknown files and bad parameters', async () => {
+    expect((await api('/api/files/999999/audio')).status).toBe(404);
+    const file = await fileOf('Polar Night');
+    expect((await api(`/api/files/${file.id}/audio?start=-1`)).status).toBe(400);
+    expect((await api(`/api/files/${file.id}/audio?path=/etc/passwd`)).status).toBe(400);
   });
 });
 

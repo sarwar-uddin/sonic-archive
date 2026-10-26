@@ -1,0 +1,178 @@
+/* The transport: a strip of the deck along the bottom of every page. */
+.bar {
+  position: fixed;
+  z-index: 20;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 20px;
+  padding: 10px var(--gutter);
+  background: rgb(13 13 12 / 0.94);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--rule-strong);
+}
+
+.now {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sleeve {
+  flex: none;
+  width: 48px;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.title,
+.meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.title {
+  font-weight: 650;
+}
+
+.meta {
+  font-size: 12.5px;
+  color: var(--paper-dim);
+}
+
+.meta a:hover {
+  color: var(--accent);
+}
+
+.transport {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.buttons {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.buttons button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--paper-dim);
+  cursor: pointer;
+}
+
+.buttons button:hover:not(:disabled) {
+  color: var(--paper);
+}
+
+.buttons button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.buttons .play {
+  width: 40px;
+  height: 40px;
+  background: var(--accent);
+  color: var(--black);
+}
+
+.buttons .play:hover {
+  color: var(--black);
+  filter: brightness(1.1);
+}
+
+.seek {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.seek input {
+  flex: 1;
+}
+
+/* Range inputs: a hairline track filled in the accent up to the value. */
+.bar input[type="range"] {
+  appearance: none;
+  height: 16px;
+  min-width: 0;
+  background:
+    linear-gradient(to right, var(--accent) 0 var(--fill), var(--rule-strong) var(--fill) 100%)
+    center / 100% 3px no-repeat;
+  cursor: pointer;
+}
+
+.bar input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--paper);
+}
+
+.bar input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--paper);
+}
+
+.side {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+}
+
+.count {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.volume {
+  width: 110px;
+}
+
+@media (max-width: 760px) {
+  .bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 12px;
+  }
+
+  .transport {
+    display: contents;
+  }
+
+  .seek {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .side {
+    display: none;
+  }
+}

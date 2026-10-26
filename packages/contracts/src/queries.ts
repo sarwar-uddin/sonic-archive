@@ -83,6 +83,15 @@ export const scanListQuery = z.strictObject({
 
 export const idParams = z.strictObject({ id });
 
+/** `start`: where a converted stream begins, in seconds (seeking). */
+export const audioQuery = z.strictObject({
+  start: z.coerce
+    .number()
+    .min(0)
+    .max(24 * 3600)
+    .optional(),
+});
+
 export const artworkQuery = z.strictObject({
   size: z.enum(['sm', 'lg', 'xl']).default('lg'),
 });

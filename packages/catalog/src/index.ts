@@ -45,6 +45,7 @@ export {
 export { type CatalogRecord, toCatalogRecord } from './metadata/map.ts';
 export { type CatalogQueries, createCatalogQueries } from './read/catalog-queries.ts';
 export { buildHealthReport, REPORT_LIMIT } from './read/health-report.ts';
+export { type Playback, playbackOf } from './read/playback.ts';
 export {
   DEFAULT_MASS_MISSING,
   type ImageCounters,

@@ -3,8 +3,10 @@ import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { api } from '../lib/api.ts';
 import { formatBytes } from '../lib/format.ts';
+import { PlayerProvider, usePlayer } from '../lib/use-player.tsx';
 import { CommandPalette, isTyping } from './CommandPalette.tsx';
 import styles from './Layout.module.css';
+import { PlayerBar } from './PlayerBar.tsx';
 
 const NAV = [
   { to: '/', label: 'Collection', end: true },
@@ -15,6 +17,15 @@ const NAV = [
 ];
 
 export function Layout() {
+  return (
+    <PlayerProvider>
+      <Shell />
+    </PlayerProvider>
+  );
+}
+
+function Shell() {
+  const [playerState, player] = usePlayer();
   const { data: stats } = useQuery({
     queryKey: ['stats'],
     queryFn: ({ signal }) => api.stats(signal),
@@ -30,11 +41,15 @@ export function Layout() {
       if (commandK || (event.key === '/' && !isTyping(event.target))) {
         event.preventDefault();
         setPalette(true);
+      } else if (event.key === ' ' && event.target === document.body) {
+        // Space plays and pauses, unless a control or field has focus.
+        event.preventDefault();
+        player.toggle();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [player]);
 
   // Move focus to the page on navigation so screen readers announce it.
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs on route change by design
@@ -44,7 +59,7 @@ export function Layout() {
   }, [location.pathname]);
 
   return (
-    <div className={styles.shell}>
+    <div className={styles.shell} data-player={playerState.queue.length > 0 ? '' : undefined}>
       <a className="skip-link" href="#main">
         Skip to content
       </a>
@@ -82,6 +97,7 @@ export function Layout() {
         <Outlet />
       </main>
       {palette && <CommandPalette onClose={() => setPalette(false)} />}
+      <PlayerBar />
       <footer className={styles.footer}>
         <p className="kicker">Read-only archive · Nothing leaves this machine</p>
       </footer>

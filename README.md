@@ -60,7 +60,7 @@ All endpoints are `GET`, return JSON, and address resources by numeric id.
 
 ## Status
 
-Milestones **M0–M12** are complete, plus a collection-led redesign: the
+Milestones **M0–M13** are complete, plus a collection-led redesign: the
 library has been scanned in full (read-only; verified unchanged afterwards).
 Covers come from folder scans (JPEG/PNG/TIFF) and are served as WebP
 thumbnails. Single-file CD images are split into their tracks by their CUE
@@ -82,4 +82,8 @@ Press `/` or Ctrl-K anywhere for a quick-search palette.
 The Ledger charts the collection: releases by decade, countries of pressing,
 rip verification, genres and most-collected artists.
 
-Possible next steps: ratings and notes, playlists, playback.
+Albums play in the browser: files as stored, CD images gapless as one
+stream, other formats (ALAC, APE, DSD…) converted to FLAC while playing
+([ADR 0009](docs/adr/0009-playback.md)).
+
+Next: dynamic library updates, dynamic range per pressing, a spine shelf view.
