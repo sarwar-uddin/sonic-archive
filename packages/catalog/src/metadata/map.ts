@@ -1,0 +1,146 @@
+import path from 'node:path';
+import type { IAudioMetadata, IPicture } from 'music-metadata';
+import type { TrackValues } from '../db/catalog-repository.ts';
+import { nameKey } from '../text/normalize.ts';
+
+export interface AlbumRecord {
+  /** `mbid:<id>`, `tag:<album artist key>|<album key>`, or `dir:<folder>`. */
+  readonly groupKey: string;
+  readonly title: string;
+  readonly albumArtist: string | null;
+  readonly year: number | null;
+  readonly musicbrainzAlbumId: string | null;
+  readonly totalDiscs: number | null;
+}
+
+export interface PictureRecord {
+  readonly data: Uint8Array;
+  readonly mime: string;
+}
+
+export interface CatalogRecord {
+  readonly track: Omit<TrackValues, 'fileId' | 'albumId'>;
+  readonly album: AlbumRecord;
+  /** Performing artists in tag order. */
+  readonly artists: readonly string[];
+  readonly composers: readonly string[];
+  readonly genres: readonly string[];
+  readonly picture: PictureRecord | null;
+}
+
+/** Used when a compilation has no album-artist tag. */
+export const VARIOUS_ARTISTS = 'Various Artists';
+
+const DISC_FOLDER = /^(cd|disc|disk)\s*\d+$/i;
+
+/**
+ * Maps parsed tags to catalog records. Pure: no I/O, so every rule here is
+ * unit-testable with hand-built inputs.
+ */
+export function toCatalogRecord(metadata: IAudioMetadata, relPath: string): CatalogRecord {
+  const { common, format } = metadata;
+
+  const artists = uniqueByKey((common.artists ?? [common.artist]).map(clean));
+  const taggedArtist = clean(common.artist);
+  // music-metadata puts only the first value of a multi-value ARTIST in
+  // `artist`, so build the display string from all of them in that case.
+  const displayArtist =
+    artists.length > 1 ? artists.join(', ') : (taggedArtist ?? artists[0] ?? null);
+
+  const albumArtist =
+    clean(common.albumartist) ?? (common.compilation ? VARIOUS_ARTISTS : (artists[0] ?? null));
+  const albumTitle = clean(common.album);
+  const mbid = clean(common.musicbrainz_albumid)?.toLowerCase() ?? null;
+  const albumDir = albumFolder(relPath);
+  const year = parseYear(common.year, common.date);
+
+  const groupKey = mbid
+    ? `mbid:${mbid}`
+    : albumTitle
+      ? `tag:${nameKey(albumArtist ?? '')}|${nameKey(albumTitle)}`
+      : `dir:${albumDir}`;
+
+  const lossless = format.lossless ?? null;
+  const picture = pickPicture(common.picture);
+
+  return {
+    track: {
+      title: clean(common.title),
+      displayArtist,
+      trackNo: positiveInt(common.track.no),
+      trackTotal: positiveInt(common.track.of),
+      discNo: positiveInt(common.disk.no),
+      discTotal: positiveInt(common.disk.of),
+      year,
+      durationMs: format.duration === undefined ? null : Math.round(format.duration * 1000),
+      codec: clean(format.codec),
+      container: clean(format.container),
+      lossless,
+      sampleRate: positiveInt(format.sampleRate),
+      // Lossy decoders may report a nominal depth; it is meaningless there.
+      bitDepth: lossless ? positiveInt(format.bitsPerSample) : null,
+      channels: positiveInt(format.numberOfChannels),
+      bitrate: format.bitrate === undefined ? null : Math.round(format.bitrate),
+      hasEmbeddedArt: picture !== null,
+    },
+    album: {
+      groupKey,
+      // Untagged files are grouped by folder so they remain browsable.
+      title: albumTitle ?? (path.basename(albumDir) || 'Unknown Album'),
+      albumArtist,
+      year,
+      musicbrainzAlbumId: mbid,
+      totalDiscs: positiveInt(common.disk.of),
+    },
+    artists,
+    composers: uniqueByKey((common.composer ?? []).map(clean)),
+    // Some taggers store several genres in one field: "Classical; Chamber".
+    genres: uniqueByKey((common.genre ?? []).flatMap((g) => g.split(';')).map(clean)),
+    picture,
+  };
+}
+
+/** The album's folder: the file's directory, or its parent for CD1/Disc 2 folders. */
+export function albumFolder(relPath: string): string {
+  const dir = path.dirname(relPath);
+  const folder = DISC_FOLDER.test(path.basename(dir)) ? path.dirname(dir) : dir;
+  return folder === '.' ? '' : folder;
+}
+
+function clean(value: string | null | undefined): string | null {
+  if (value === undefined || value === null) return null;
+  // Some taggers leave NUL terminators or padding inside values.
+  const cleaned = value.replaceAll('\0', '').trim();
+  return cleaned === '' ? null : cleaned;
+}
+
+function uniqueByKey(values: readonly (string | null)[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    if (value === null) continue;
+    const key = nameKey(value);
+    if (key === '' || seen.has(key)) continue;
+    seen.add(key);
+    out.push(value);
+  }
+  return out;
+}
+
+function positiveInt(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : null;
+}
+
+function parseYear(year: number | undefined, date: string | undefined): number | null {
+  const candidate = year ?? Number(/^\s*(\d{4})/.exec(date ?? '')?.[1]);
+  return Number.isInteger(candidate) && candidate >= 1000 && candidate <= 9999 ? candidate : null;
+}
+
+function pickPicture(pictures: readonly IPicture[] | undefined): PictureRecord | null {
+  if (!pictures || pictures.length === 0) return null;
+  const chosen = pictures.find((p) => p.type === 'Cover (front)') ?? pictures[0];
+  if (!chosen || chosen.data.length === 0) return null;
+  const mime =
+    chosen.format.toLowerCase() === 'image/jpg' ? 'image/jpeg' : chosen.format.toLowerCase();
+  return { data: chosen.data, mime };
+}

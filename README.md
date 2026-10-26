@@ -16,15 +16,17 @@ pnpm install
 pnpm check      # typecheck + lint + tests
 pnpm paths      # show where config, database and cache live
 pnpm db:migrate # create or upgrade the catalog database (backs up first)
+pnpm scan       # index the library: read-only, needs --confirm (see docs/safety.md)
 ```
 
 ## Layout
 
-| Path               | Purpose                                          |
-| ------------------ | ------------------------------------------------ |
-| `packages/catalog` | Domain core: config, scanner, database (no HTTP) |
-| `apps/server`      | CLI now; Express API from M3                     |
-| `docs/adr`         | Architecture decision records                    |
+| Path               | Purpose                                                                |
+| ------------------ | ---------------------------------------------------------------------- |
+| `packages/catalog` | Domain core: config, scanner, database (no HTTP)                       |
+| `apps/server`      | CLI now; Express API from M3                                           |
+| `docs/adr`         | Architecture decision records                                          |
+| `test-fixtures`    | Synthetic audio library for tests ([details](test-fixtures/README.md)) |
 
 ## Changing the database schema
 
@@ -38,5 +40,6 @@ pnpm db:migrate # create or upgrade the catalog database (backs up first)
 
 ## Status
 
-Milestones **M0 (foundation)** and **M1 (database)** are complete. The next
-milestone is M2: the scanner, tested on synthetic audio fixtures.
+Milestones **M0 (foundation)**, **M1 (database)** and **M2 (scanner)** are
+complete. Next is M2.5, an authorized sample scan of one or two folders from
+the real library, and then M3, the read-only API.

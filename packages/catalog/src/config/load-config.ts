@@ -1,9 +1,9 @@
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
 import { ConfigError } from './errors.ts';
 import { type AppDirs, type Env, resolveAppDirs } from './paths.ts';
+import { isTestRuntime, testSandboxDirs } from './sandbox.ts';
 import { validateLibraryRoot } from './validate-root.ts';
 
 export type LibraryConfig =
@@ -26,9 +26,6 @@ const configFileSchema = z.strictObject({
   libraryRoot: z.string().min(1).optional(),
 });
 
-/** Repo-local directory holding synthetic audio fixtures. */
-const TEST_FIXTURES_DIR = path.resolve(import.meta.dirname, '../../../../test-fixtures');
-
 /**
  * Loads and validates configuration. Throws `ConfigError` on anything unsafe.
  *
@@ -48,19 +45,9 @@ export function loadConfig({ env, homeDir }: LoadConfigOptions): AppConfig {
   const root = validateLibraryRoot(rawRoot, {
     homeDir,
     appDirs: dirs,
-    ...(isTestRuntime(env) && { sandboxDirs: [os.tmpdir(), TEST_FIXTURES_DIR] }),
+    ...(isTestRuntime(env) && { sandboxDirs: testSandboxDirs() }),
   });
   return { dirs, library: { status: 'configured', root } };
-}
-
-/**
- * Checks the real process environment as well as the injected one, so a
- * test cannot switch the sandbox off by passing a hand-built `env`.
- */
-function isTestRuntime(env: Env): boolean {
-  return (
-    process.env.VITEST !== undefined || process.env.NODE_ENV === 'test' || env.NODE_ENV === 'test'
-  );
 }
 
 function readConfigFile(file: string): z.infer<typeof configFileSchema> {

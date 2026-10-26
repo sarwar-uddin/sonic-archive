@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, lt, ne } from 'drizzle-orm';
 import type { CatalogExecutor } from './database.ts';
 import { files, libraryRoots, type SCAN_MODES, type SCAN_STATUSES, scans } from './schema.ts';
 import { excluded } from './sql-helpers.ts';
@@ -13,6 +13,10 @@ export function ensureLibraryRoot(db: CatalogExecutor, rootPath: string): Librar
   const row = db.select().from(libraryRoots).where(eq(libraryRoots.path, rootPath)).get();
   if (!row) throw new Error(`Library root row missing after insert: ${rootPath}`);
   return row;
+}
+
+export function findLibraryRoot(db: CatalogExecutor, rootPath: string): LibraryRoot | undefined {
+  return db.select().from(libraryRoots).where(eq(libraryRoots.path, rootPath)).get();
 }
 
 export interface StartScanInput {
@@ -125,4 +129,51 @@ export function getFileByPath(
     .from(files)
     .where(and(eq(files.rootId, rootId), eq(files.relPath, relPath)))
     .get();
+}
+
+/**
+ * Closes scans left `running` by a crash or kill, so the history never shows
+ * a phantom scan in progress. Their files are left exactly as they were.
+ */
+export function abortStaleScans(db: CatalogExecutor, rootId: number, at: Date): number {
+  return db
+    .update(scans)
+    .set({ status: 'aborted', finishedAt: at, errorMessage: 'Interrupted before completion.' })
+    .where(and(eq(scans.rootId, rootId), eq(scans.status, 'running')))
+    .run().changes;
+}
+
+/** Non-missing files under the root that the given scan did not see. */
+export function findUnseenFiles(db: CatalogExecutor, rootId: number, scanId: number): number[] {
+  return db
+    .select({ id: files.id })
+    .from(files)
+    .where(
+      and(eq(files.rootId, rootId), ne(files.status, 'missing'), lt(files.lastSeenScanId, scanId)),
+    )
+    .all()
+    .map((row) => row.id);
+}
+
+/** Files that were known (and not already missing) before the given scan began. */
+export function countKnownFiles(db: CatalogExecutor, rootId: number, scanId: number): number {
+  const row = db
+    .select({ n: count() })
+    .from(files)
+    .where(
+      and(eq(files.rootId, rootId), ne(files.status, 'missing'), lt(files.firstSeenScanId, scanId)),
+    )
+    .get();
+  return row?.n ?? 0;
+}
+
+/** Flags files as missing. Rows are kept: missing is a state, not a deletion. */
+export function markFilesMissing(db: CatalogExecutor, fileIds: readonly number[], at: Date): void {
+  // Chunked to stay well under SQLite's bound-parameter limit.
+  for (let i = 0; i < fileIds.length; i += 500) {
+    db.update(files)
+      .set({ status: 'missing', missingSince: at })
+      .where(inArray(files.id, fileIds.slice(i, i + 500)))
+      .run();
+  }
 }

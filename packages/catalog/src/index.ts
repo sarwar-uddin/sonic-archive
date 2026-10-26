@@ -1,3 +1,4 @@
+export { ARTWORK_SUBDIR, storeArtwork } from './cache/artwork-cache.ts';
 export { ConfigError, type ConfigErrorCode } from './config/errors.ts';
 export {
   type AppConfig,
@@ -8,6 +9,7 @@ export {
 } from './config/load-config.ts';
 export { isSameOrInside, pathsOverlap } from './config/path-utils.ts';
 export { type AppDirs, type Env, resolveAppDirs } from './config/paths.ts';
+export { assertInsideTestSandbox, isTestRuntime } from './config/sandbox.ts';
 export { type RootValidationContext, validateLibraryRoot } from './config/validate-root.ts';
 export * from './db/catalog-repository.ts';
 export {
@@ -25,4 +27,26 @@ export {
   migrateCatalog,
 } from './db/migrate.ts';
 export * as schema from './db/schema.ts';
+export {
+  AUDIO_EXTENSIONS,
+  type AudioFileEntry,
+  createLibraryReader,
+  type LibraryReader,
+  type WalkEvent,
+  type WalkProblem,
+} from './fs/library-reader.ts';
+export {
+  type PathSafetyCode,
+  PathSafetyError,
+  resolveInsideRoot,
+} from './fs/resolve-inside-root.ts';
+export { type CatalogRecord, toCatalogRecord } from './metadata/map.ts';
+export {
+  DEFAULT_MASS_MISSING,
+  type MassMissingThreshold,
+  runScan,
+  type ScanOptions,
+  type ScanProblem,
+  type ScanSummary,
+} from './scanner/scan.ts';
 export { nameKey } from './text/normalize.ts';
