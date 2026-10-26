@@ -210,6 +210,7 @@ describe('GET /api/albums', () => {
         rip: null, // no rip log
         pressings: 1,
         dr: 0, // steady sine tones
+        obi: false,
       },
     ]);
   });

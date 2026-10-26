@@ -2,6 +2,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router';
 import { AlbumGrid } from '../components/AlbumGrid.tsx';
 import { Pager } from '../components/Pager.tsx';
+import { Shelf } from '../components/Shelf.tsx';
 import { EmptyLibrary, ErrorMessage, Loading, NoResults } from '../components/States.tsx';
 import { api, type Params } from '../lib/api.ts';
 import { plural, shortCodec } from '../lib/format.ts';
@@ -98,6 +99,13 @@ export function LibraryPage() {
     setParams(next);
   };
   const filtering = FILTER_KEYS.some((key) => params.has(key));
+  const view = params.get('view') === 'shelf' ? 'shelf' : 'grid';
+  const setView = (next: 'grid' | 'shelf') => {
+    const p = new URLSearchParams(params);
+    if (next === 'shelf') p.set('view', 'shelf');
+    else p.delete('view');
+    setParams(p);
+  };
   const decades = [...new Set((facets.data?.years ?? []).map((y) => Math.floor(y.year / 10) * 10))];
 
   return (
@@ -202,6 +210,14 @@ export function LibraryPage() {
               </option>
             ))}
           </Select>
+          <fieldset className={styles.view}>
+            <legend className="kicker">View</legend>
+            {(['grid', 'shelf'] as const).map((v) => (
+              <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)}>
+                {v === 'grid' ? 'Covers' : 'Shelf'}
+              </button>
+            ))}
+          </fieldset>
           {filtering && (
             <button
               type="button"
@@ -226,7 +242,11 @@ export function LibraryPage() {
         <NoResults>No albums match these filters.</NoResults>
       ) : (
         <>
-          <AlbumGrid albums={albums.data.items} groupByArtist={sort.sort === 'artist'} />
+          {view === 'shelf' ? (
+            <Shelf albums={albums.data.items} groupByArtist={sort.sort === 'artist'} />
+          ) : (
+            <AlbumGrid albums={albums.data.items} groupByArtist={sort.sort === 'artist'} />
+          )}
           <Pager page={albums.data.page} limit={albums.data.limit} total={albums.data.total} />
         </>
       )}

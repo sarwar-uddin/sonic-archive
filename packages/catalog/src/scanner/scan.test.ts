@@ -594,6 +594,16 @@ describe('scanned artwork', () => {
     });
   });
 
+  it('marks albums whose scans include an OBI strip', async () => {
+    const drift = path.join(lib.root, 'Drift/Double Album (1999)');
+    fs.copyFileSync(path.join(drift, 'folder.jpg'), path.join(drift, 'OBI.jpg'));
+    await scanWithArt();
+    const queries = createCatalogQueries(catalog.database.sqlite);
+    const albums = queries.listAlbums({ sort: 'title', order: 'asc', page: 1, limit: 50 });
+    const obi = albums.items.filter((a) => a.obi).map((a) => a.title);
+    expect(obi).toEqual(['Double Album']);
+  });
+
   it('collects no images without a renderer', async () => {
     const summary = await scan();
     expect(summary.images).toMatchObject({ rendered: 0, unchanged: 0, failed: 0 });

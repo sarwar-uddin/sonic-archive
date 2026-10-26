@@ -49,6 +49,7 @@ export const albumSummary: AlbumSummary = {
   rip: null,
   pressings: 1,
   dr: null,
+  obi: false,
 };
 
 export const albumDetail: AlbumDetail = {

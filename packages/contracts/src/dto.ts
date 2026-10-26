@@ -38,6 +38,8 @@ export interface AlbumSummary {
   readonly pressings: number;
   /** Dynamic range (DR meter), the rounded mean of measured tracks; null until analyzed. */
   readonly dr: number | null;
+  /** The folder has a scan of the OBI strip: a Japanese pressing with its OBI. */
+  readonly obi: boolean;
 }
 
 /**

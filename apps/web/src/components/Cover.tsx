@@ -49,7 +49,8 @@ export function Cover({ artworkId, title, artist, size = 'sm', eager = false }: 
   );
 }
 
-function hue(text: string): number {
+/** A stable hue (0–359) from text: the same album always gets the same tint. */
+export function hue(text: string): number {
   let h = 0;
   for (const char of text) h = (h * 31 + (char.codePointAt(0) ?? 0)) % 360;
   return h;

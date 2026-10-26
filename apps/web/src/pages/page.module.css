@@ -187,3 +187,33 @@
     min-width: 0;
   }
 }
+
+/* Covers / Shelf switch in the collection toolbar. */
+.view {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.view legend {
+  padding: 0;
+  margin-bottom: 7px;
+}
+
+.view button {
+  padding: 6px 12px;
+  border: 1px solid var(--rule-strong);
+  background: none;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.view button + button {
+  margin-left: -1px;
+}
+
+.view button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  position: relative;
+}

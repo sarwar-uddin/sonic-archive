@@ -200,11 +200,26 @@ export function createCatalogQueries(sqlite: Database.Database): CatalogQueries 
     }
     return pressingCache.groups;
   };
+  // Albums with an OBI scan, from scan names (like scan kinds, decided when read).
+  let obiCache: { signature: string; albums: Set<number> } | null = null;
+  const obiAlbums = (): Set<number> => {
+    const sig = get('SELECT count(*) AS n, coalesce(max(id), 0) AS m FROM album_images');
+    const signature = `${sig?.n}:${sig?.m}`;
+    if (obiCache?.signature !== signature) {
+      const albums = new Set<number>();
+      for (const row of all('SELECT album_id, rel_path FROM album_images')) {
+        if (classifyScan(String(row.rel_path)).kind === 'obi') albums.add(Number(row.album_id));
+      }
+      obiCache = { signature, albums };
+    }
+    return obiCache.albums;
+  };
   const summarize = (row: Row) =>
     toAlbumSummary(
       row,
       ripVerdicts().get(Number(row.id)) ?? null,
       pressingGroups().get(Number(row.id))?.length ?? 1,
+      obiAlbums().has(Number(row.id)),
     );
 
   /** Track ids matching free text, as an SQL fragment, or null for "no match possible". */
@@ -779,7 +794,12 @@ export function createCatalogQueries(sqlite: Database.Database): CatalogQueries 
   };
 }
 
-function toAlbumSummary(row: Row, rip: RipVerdict | null, pressings: number): AlbumSummary {
+function toAlbumSummary(
+  row: Row,
+  rip: RipVerdict | null,
+  pressings: number,
+  obi: boolean,
+): AlbumSummary {
   const trackCount = Number(row.track_count ?? 0);
   const durationMs = Number(row.duration_ms ?? 0);
   return {
@@ -808,6 +828,7 @@ function toAlbumSummary(row: Row, rip: RipVerdict | null, pressings: number): Al
       row.dr_exact === null || row.dr_exact === undefined
         ? null
         : Math.round(Number(row.dr_exact)) || 0,
+    obi,
   };
 }
 

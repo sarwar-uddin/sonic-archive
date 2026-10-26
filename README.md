@@ -75,7 +75,7 @@ All endpoints are `GET`, return JSON, and address resources by numeric id.
 
 ## Status
 
-Milestones **M0–M16** are complete, plus a collection-led redesign: the
+Milestones **M0–M17** are complete, plus a collection-led redesign: the
 library has been scanned in full (read-only; verified unchanged afterwards).
 Covers come from folder scans (JPEG/PNG/TIFF) and are served as WebP
 thumbnails. Single-file CD images are split into their tracks by their CUE
@@ -111,4 +111,7 @@ decade on the Ledger; new tracks are measured after each scan.
 Anyone can install it: the music folder is chosen inside the app
 ([ADR 0010](docs/adr/0010-app-for-everyone.md)).
 
-Next: a spine shelf view.
+The collection can also stand on a shelf: CD spines in their covers' colors,
+OBI bands on Japanese pressings, letter dividers.
+
+Ideas for later: lyrics, ratings and notes, playlists, several music folders.

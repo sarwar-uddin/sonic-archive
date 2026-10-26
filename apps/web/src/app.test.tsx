@@ -236,6 +236,30 @@ describe('library page', () => {
     expect(screen.getByText('1st Japan · SICP-1234')).toBeInTheDocument();
   });
 
+  it('stands albums on a shelf as spines', async () => {
+    const japan = {
+      ...albumSummary,
+      id: 9,
+      title: 'Paranoid',
+      albumArtist: { id: 3, name: 'Black Sabbath' },
+      year: 1970,
+      edition: ['1991 Japan TECP-23893 Teichiku'],
+      obi: true,
+    };
+    mockApi({ albums: page([albumSummary, japan]), facets, stats });
+    const { router } = renderApp('/');
+    await screen.findByRole('heading', { level: 1 });
+    await userEvent.click(screen.getByRole('button', { name: 'Shelf' }));
+    expect(router.state.location.search).toBe('?view=shelf');
+    const shelf = within(screen.getByRole('list', { name: 'Albums on the shelf' }));
+    const spine = shelf.getByRole('link', { name: 'Black Sabbath · Paranoid · 1970' });
+    expect(spine).toHaveAttribute('href', '/albums/9');
+    expect(within(spine).getByText('TECP-23893')).toBeInTheDocument();
+    expect(shelf.getByRole('link', { name: /Hi-Res Session/ })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Covers' }));
+    expect(router.state.location.search).toBe('');
+  });
+
   it('notes albums held in more than one pressing', async () => {
     mockApi({ albums: page([{ ...albumSummary, pressings: 2 }]), facets, stats });
     renderApp('/');
