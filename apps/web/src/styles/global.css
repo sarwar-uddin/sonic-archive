@@ -1,26 +1,32 @@
 /*
- * Design tokens. A warm near-black page, paper-coloured type, hairline rules,
- * and one restrained accent. Cover art supplies the rest of the colour.
+ * Sonic Archive design tokens.
+ *
+ * The collection sets the tone: first pressings and Japanese CDs with OBI
+ * strips, Blue Note and Impulse typography, metal and prog sleeves, film
+ * scores. So: near-black stock, warm paper type, one OBI red, and a single
+ * variable grotesque (Archivo) stretched from condensed poster headlines to
+ * wide catalogue labels, with a monospace for matrix and catalogue numbers.
  */
 :root {
-  --ink: #0f0e0c;
-  --ink-raised: #161411;
-  --ink-sunken: #0b0a09;
-  --rule: #2b2823;
-  --rule-strong: #3d3932;
-  --paper: #ece6da;
-  --paper-dim: #b9b1a3;
-  --muted: #8a8276;
-  --accent: #d0553a;
-  --accent-soft: rgb(208 85 58 / 0.14);
-  --warn: #d9a441;
+  --black: #070707;
+  --ink: #0d0d0c;
+  --ink-raised: #161614;
+  --ink-sunken: #080808;
+  --rule: #24231f;
+  --rule-strong: #393730;
+  --paper: #ece7db;
+  --paper-dim: #b6b0a3;
+  --muted: #827d74;
+  --accent: #e2412e;
+  --accent-dim: rgb(226 65 46 / 0.16);
+  --obi: #efe9dc;
+  --warn: #e0a841;
 
-  --font-display: "Fraunces Variable", "Iowan Old Style", Georgia, serif;
-  --font-ui: "Inter Tight Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: "Archivo Variable", "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 
-  --gutter: clamp(16px, 4vw, 48px);
-  --measure: 1360px;
+  --gutter: clamp(16px, 4vw, 56px);
+  --measure: 1440px;
   --radius: 2px;
 
   color-scheme: dark;
@@ -41,10 +47,9 @@ body {
   margin: 0;
   background: var(--ink);
   color: var(--paper);
-  font-family: var(--font-ui);
+  font-family: var(--font-sans);
   font-size: 15px;
   line-height: 1.5;
-  font-feature-settings: "ss01", "cv11";
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -54,10 +59,7 @@ h2,
 h3,
 h4 {
   margin: 0;
-  font-family: var(--font-display);
-  font-weight: 400;
-  font-optical-sizing: auto;
-  letter-spacing: -0.01em;
+  font-weight: 700;
   line-height: 1.05;
 }
 
@@ -68,10 +70,6 @@ p {
 a {
   color: inherit;
   text-decoration: none;
-}
-
-a:hover {
-  color: var(--paper);
 }
 
 button,
@@ -93,15 +91,26 @@ img {
 
 ::selection {
   background: var(--accent);
-  color: var(--ink);
+  color: var(--black);
 }
 
-/* Small capitals used for labels throughout: the magazine "kicker". */
+/* Condensed poster headline: sleeve titles, section names, big numbers. */
+.display {
+  font-family: var(--font-sans);
+  font-stretch: 68%;
+  font-weight: 820;
+  text-transform: uppercase;
+  letter-spacing: -0.005em;
+  line-height: 0.88;
+}
+
+/* Wide spaced label, like the small print on a label or OBI. */
 .kicker {
-  font-family: var(--font-ui);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
+  font-family: var(--font-sans);
+  font-stretch: 112%;
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--muted);
 }
@@ -111,6 +120,24 @@ img {
   font-size: 12px;
   letter-spacing: 0;
   font-variant-numeric: tabular-nums;
+}
+
+/* Bordered spec tag: "FLAC 16/44.1". Hi-res tags take the accent. */
+.tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--paper-dim);
+  white-space: nowrap;
+}
+
+.tag-hires {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .visually-hidden {
@@ -132,7 +159,7 @@ img {
   z-index: 10;
   padding: 8px 12px;
   background: var(--paper);
-  color: var(--ink);
+  color: var(--black);
 }
 
 .skip-link:focus {

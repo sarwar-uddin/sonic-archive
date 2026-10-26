@@ -2,11 +2,11 @@ import { useQuery } from '@tanstack/react-query';
 import { type FormEvent, useEffect, useRef } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { api } from '../lib/api.ts';
-import { plural } from '../lib/format.ts';
+import { formatBytes } from '../lib/format.ts';
 import styles from './Layout.module.css';
 
 const NAV = [
-  { to: '/', label: 'Albums', end: true },
+  { to: '/', label: 'Collection', end: true },
   { to: '/artists', label: 'Artists', end: false },
   { to: '/tracks', label: 'Tracks', end: false },
   { to: '/health', label: 'Health', end: false },
@@ -34,15 +34,18 @@ export function Layout() {
         Skip to content
       </a>
       <header className={styles.masthead}>
-        <div className={styles.top}>
+        <div className={styles.bar}>
           <Link to="/" className={styles.wordmark} aria-label="Sonic Archive, home">
-            Sonic <em>Archive</em>
+            <span className={styles.label} aria-hidden="true" />
+            <span className="display">Sonic Archive</span>
           </Link>
-          <p className={`kicker ${styles.edition}`}>
-            {stats
-              ? `${plural(stats.albums, 'album')} · ${plural(stats.tracks, 'track')}`
-              : 'A private collection'}
-          </p>
+          {stats && (
+            <p className={`mono ${styles.plate}`}>
+              <span>{stats.tracks.toLocaleString('en')} tracks</span>
+              <span>{stats.artists.toLocaleString('en')} artists</span>
+              <span>{formatBytes(stats.totalBytes)}</span>
+            </p>
+          )}
           <SearchBox />
         </div>
         <nav aria-label="Sections" className={styles.nav}>
@@ -64,7 +67,7 @@ export function Layout() {
         <Outlet />
       </main>
       <footer className={styles.footer}>
-        <p className="kicker">Read-only · Local · Yours</p>
+        <p className="kicker">Read-only archive · Nothing leaves this machine</p>
       </footer>
     </div>
   );

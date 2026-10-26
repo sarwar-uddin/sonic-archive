@@ -1,15 +1,18 @@
 .listing {
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 26px;
 }
 
 .disc {
-  padding-bottom: 8px;
+  margin-top: 10px;
+  padding: 6px 0;
   font-size: 15px;
-  font-style: italic;
-  color: var(--paper-dim);
-  border-bottom: 1px solid var(--rule-strong);
+  font-stretch: 112%;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
 }
 
 .tracks {
@@ -25,20 +28,17 @@
 .summary {
   width: 100%;
   display: grid;
-  grid-template-columns: 2.5em minmax(0, 1fr) auto 4em;
+  grid-template-columns: 2.6em minmax(0, 1fr) auto 4.2em;
   align-items: baseline;
   gap: 14px;
-  padding: 11px 4px;
+  padding: 12px 6px;
   background: none;
   border: 0;
   text-align: left;
   cursor: pointer;
 }
 
-.summary:hover {
-  background: var(--ink-raised);
-}
-
+.summary:hover,
 .summary[aria-expanded="true"] {
   background: var(--ink-raised);
 }
@@ -57,9 +57,8 @@
 }
 
 .title {
-  font-family: var(--font-display);
-  font-size: 17px;
-  font-variation-settings: "opsz" 24;
+  font-size: 16px;
+  font-weight: 560;
 }
 
 .artist {
@@ -69,8 +68,8 @@
 
 .status {
   font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
+  font-weight: 700;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--warn);
   border: 1px solid currentcolor;
@@ -98,7 +97,7 @@
 }
 
 .details {
-  padding: 4px 4px 18px calc(2.5em + 18px);
+  padding: 6px 6px 18px calc(2.6em + 20px);
   background: var(--ink-raised);
 }
 
@@ -131,7 +130,7 @@
 
 @media (max-width: 520px) {
   .summary {
-    grid-template-columns: 2em minmax(0, 1fr) 3.5em;
+    grid-template-columns: 2em minmax(0, 1fr) 3.6em;
   }
 
   .resolution {

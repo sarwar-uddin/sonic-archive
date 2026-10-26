@@ -35,6 +35,14 @@ describe('toCatalogRecord: albums', () => {
     expect(r.album.albumArtist).toBe('Solo');
   });
 
+  it('ignores an album tag that is only a pressing code', () => {
+    const r = toCatalogRecord(
+      meta({ album: '(CDP 7 46384 2) [1st UK]', albumartist: 'Pink Floyd' }),
+      'Pink Floyd/1967 The Piper at the Gates of Dawn/(CDP 7 46384 2) [1st UK]/a.flac',
+    );
+    expect(r.album).toMatchObject({ title: 'The Piper at the Gates of Dawn', year: 1967 });
+  });
+
   it('uses Various Artists for an untagged compilation', () => {
     const r = toCatalogRecord(meta({ album: 'Mix', artist: 'One', compilation: true }), 'm.flac');
     expect(r.album.albumArtist).toBe(VARIOUS_ARTISTS);
@@ -161,18 +169,19 @@ describe('toCatalogRecord: artwork', () => {
 
 describe('folderTitle', () => {
   it.each([
+    ['Pink Floyd/Studio/1971 Meddle/(CDP 7 46034 2) [1st UK]', 'Meddle', 1971],
     [
-      'Pink Floyd/Studio/1973 The Dark Side Of The Moon/(CDP 7 46001 2) [1st UK]',
-      '1973 The Dark Side Of The Moon (CDP 7 46001 2) [1st UK]',
+      'Black Sabbath/1970 Paranoid/1970 Paranoid [1991 Japan TECP-23893 Teichiku]',
+      'Paranoid',
+      1970,
     ],
-    [
-      'Black Sabbath/1970 Paranoid [1991 Japan TECP-23893]',
-      '1970 Paranoid [1991 Japan TECP-23893]',
-    ],
-    ['[Bootlegs]', '[Bootlegs]'],
-    ['', 'Unknown Album'],
-  ])('%s → %s', (dir, expected) => {
-    expect(folderTitle(dir)).toBe(expected);
+    ['GYBE/1998. F♯ A♯ ∞ [2000, PCD-23058]', 'F♯ A♯ ∞', 1998],
+    ['Death - Symbolic [Roadrunner Records, RR 8957-2, Netherlands]', 'Death - Symbolic', null],
+    ['Untagged', 'Untagged', null],
+    ['[Bootlegs]', '[Bootlegs]', null],
+    ['', 'Unknown Album', null],
+  ])('%s → %s (%s)', (dir, title, year) => {
+    expect(folderTitle(dir)).toEqual({ title, year });
   });
 });
 

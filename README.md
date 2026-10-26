@@ -60,16 +60,11 @@ All endpoints are `GET`, return JSON, and address resources by numeric id.
 
 ## Status
 
-Milestones **M0–M5** are complete: foundation, database, read-only scanner,
-API, web frontend (the MVP), and library health reports. Two real album
-folders have been sample-scanned (M2.5); the full-library scan is waiting
-for explicit approval:
+Milestones **M0–M6** are complete, plus a collection-led redesign: the
+library has been scanned in full (read-only; verified unchanged afterwards).
+CD images kept as one FLAC per disc take their album details from the CUE
+sheet; covers come from folder scans (JPEG/PNG/TIFF) and are served as WebP
+thumbnails.
 
-```sh
-pnpm scan --confirm            # full library, incremental, read-only
-```
-
-Next candidates, each needing a design decision first: artwork thumbnails
-(M6, adds a native image library), ratings and notes (M7, the first API
-writes), playlists (M8), and optional playback (M9, browser codec support
-and transcoding).
+Next candidates: splitting CD images into their tracks using the CUE sheets
+(a schema change), ratings and notes, playlists, and playback.

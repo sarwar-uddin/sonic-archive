@@ -9,8 +9,7 @@
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
-    "@fontsource-variable/fraunces": "5.3.0",
-    "@fontsource-variable/inter-tight": "5.3.0",
+    "@fontsource-variable/archivo": "5.3.0",
     "@fontsource/ibm-plex-mono": "5.3.0",
     "@sonic-archive/contracts": "workspace:*",
     "@tanstack/react-query": "5.104.5",

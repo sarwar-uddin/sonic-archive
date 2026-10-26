@@ -41,9 +41,8 @@ describe('album page', () => {
   it('shows a spec sheet with full and compact resolution', async () => {
     mockApi({ 'albums/7': albumDetail, stats });
     renderApp('/albums/7');
-    const sheet = within(await screen.findByRole('region', { name: 'Specification' }));
+    const sheet = within(await screen.findByRole('complementary', { name: 'Specification' }));
     expect(sheet.getByText('24 bit / 96 kHz')).toBeInTheDocument();
-    expect(sheet.getByText('24/96')).toBeInTheDocument();
     expect(sheet.getByText('3 tracks on 2 discs')).toBeInTheDocument();
     expect(sheet.getByText('114 MB')).toBeInTheDocument();
   });
@@ -85,7 +84,12 @@ describe('library page', () => {
       '/albums/7',
     );
     expect(screen.getByText('FLAC 24/96')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('1 album');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Releases');
+    // Once in the page count, once on the artist divider (sorted by artist).
+    expect(screen.getAllByText('1 release')).toHaveLength(2);
+    expect(screen.getByRole('heading', { level: 2, name: 'Basalt Quartet' })).toBeInTheDocument();
+    // Pressing details from the folder name appear on the card.
+    expect(screen.getByText('1st Japan · SICP-1234')).toBeInTheDocument();
   });
 
   it('turns filter choices into URL state and API parameters', async () => {
@@ -132,7 +136,7 @@ describe('search', () => {
       facets,
       search: (url: URL) => ({
         albums: url.searchParams.get('q') === 'basalt' ? [albumSummary] : [],
-        artists: [{ id: 1, name: 'Basalt Quartet', albumCount: 1, trackCount: 3 }],
+        artists: [{ id: 1, name: 'Basalt Quartet', albumCount: 1, trackCount: 3, artworkIds: [] }],
         tracks: [],
       }),
     });
@@ -156,7 +160,7 @@ describe('groupByInitial', () => {
   it('folds accents, keeps other scripts, and puts symbols last', () => {
     const names = ['Ísold', 'iron maiden', 'Дискография', '2Pac', 'Àbba', 'Opeth'];
     const groups = groupByInitial(
-      names.map((name, id) => ({ id, name, albumCount: 1, trackCount: 1 })),
+      names.map((name, id) => ({ id, name, albumCount: 1, trackCount: 1, artworkIds: [] })),
     );
     expect(groups.map(([letter, list]) => [letter, list.map((a) => a.name)])).toEqual([
       ['A', ['Àbba']],

@@ -39,6 +39,8 @@ export const albumSummary: AlbumSummary = {
   maxSampleRate: 96_000,
   maxBitDepth: 24,
   lossless: true,
+  kind: 'release',
+  edition: ['1st Japan', 'SICP-1234'],
 };
 
 export const albumDetail: AlbumDetail = {

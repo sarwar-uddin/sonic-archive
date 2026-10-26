@@ -192,6 +192,8 @@ describe('GET /api/albums', () => {
         maxSampleRate: 96000,
         maxBitDepth: 24,
         lossless: true,
+        kind: 'loose', // 2 short tracks; see ALBUM_KINDS
+        edition: [], // "(2020)" is a year, not an edition
       },
     ]);
   });
@@ -204,6 +206,8 @@ describe('GET /api/albums', () => {
     ['lossless=false', ['Format Sampler']],
     ['minSampleRate=96000', ['Hi-Res Session']],
     ['minBitDepth=24', ['Hi-Res Session']],
+    ['kind=release', ['Format Sampler']],
+    ['kind=loose&q=northern', ['Northern Lines']],
     ['codec=alac', ['Hi-Res Session']],
     ['yearFrom=2010&yearTo=2018', ['Format Sampler', '夜明け', 'Harbour Lights']],
   ])('filters by %s', async (query, expected) => {
@@ -304,7 +308,13 @@ describe('artists', () => {
   it('lists artists with album and track counts', async () => {
     const body = (await api('/api/artists?q=AURORA')).body as Page<ArtistSummary>;
     expect(body.items).toEqual([
-      { id: expect.any(Number), name: 'Aurora Field', albumCount: 3, trackCount: 4 },
+      {
+        id: expect.any(Number),
+        name: 'Aurora Field',
+        albumCount: 3,
+        trackCount: 4,
+        artworkIds: [expect.any(Number)], // only Northern Lines has a cover
+      },
     ]);
   });
 
@@ -383,6 +393,21 @@ describe('GET /api/artwork/:id', () => {
       expect(res.headers['content-type']).toBe('image/webp');
       expect((await sharp(res.body as Buffer).metadata()).width).toBe(edge);
     }
+  });
+
+  it('serves artwork from a cache inside a dot-directory (~/.cache)', async () => {
+    const dotCache = path.join(catalog.dataDir, '.cache', 'sonic-archive', ARTWORK_SUBDIR);
+    fs.cpSync(path.join(cacheDir, ARTWORK_SUBDIR), dotCache, { recursive: true });
+    const dotApp = createApp({
+      queries: createCatalogQueries(reader.sqlite),
+      healthReport: () => buildHealthReport(reader.sqlite),
+      artworkDir: dotCache,
+      libraryRoot: lib.root,
+    });
+    const album = (await api(`/api/albums/${await albumId('Northern Lines')}`)).body as AlbumDetail;
+    const res = await request(dotApp).get(`/api/artwork/${album.artworkId}?size=sm`);
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('image/webp');
   });
 
   it('rejects unknown sizes and 404s undecodable files', async () => {

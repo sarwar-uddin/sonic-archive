@@ -1,0 +1,51 @@
+.mosaic {
+  display: grid;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: var(--ink-raised);
+  box-shadow: 0 16px 34px -22px rgb(0 0 0 / 0.95);
+}
+
+.mosaic img {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: cover;
+}
+
+.one {
+  grid-template: 1fr / 1fr;
+}
+
+.two {
+  grid-template: 1fr / 1fr 1fr;
+}
+
+.three {
+  grid-template: 1fr 1fr / 1fr 1fr;
+}
+
+.three img:first-child {
+  grid-row: span 2;
+}
+
+.four {
+  grid-template: 1fr 1fr / 1fr 1fr;
+}
+
+.empty {
+  display: flex;
+  align-items: flex-end;
+  padding: 10%;
+  background: linear-gradient(160deg, #1d1c19, #121210);
+  border: 1px solid var(--rule);
+}
+
+.empty span {
+  font-size: clamp(56px, 7vw, 96px);
+  font-stretch: 62%;
+  font-weight: 900;
+  line-height: 0.8;
+  text-transform: uppercase;
+  color: var(--rule-strong);
+}

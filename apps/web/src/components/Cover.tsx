@@ -12,9 +12,9 @@ interface CoverProps {
 }
 
 /**
- * Album artwork, or a typeset placeholder sleeve when there is none (or it
- * fails to load). The placeholder tint is derived from the title, so the same
- * album always gets the same sleeve.
+ * Album artwork, or a plain printed sleeve when there is none (or it fails
+ * to load). The sleeve tint comes from the title, so an album always gets
+ * the same one.
  */
 export function Cover({ artworkId, title, artist, size = 'sm', eager = false }: CoverProps) {
   const [failed, setFailed] = useState(false);
@@ -42,8 +42,9 @@ export function Cover({ artworkId, title, artist, size = 'sm', eager = false }: 
       role="img"
       aria-label={`No cover for ${label}`}
     >
-      <span className={styles.placeholderTitle}>{title}</span>
+      <span className={styles.disc} aria-hidden="true" />
       {artist && <span className={styles.placeholderArtist}>{artist}</span>}
+      <span className={styles.placeholderTitle}>{title}</span>
     </div>
   );
 }

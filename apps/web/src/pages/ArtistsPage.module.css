@@ -1,72 +1,100 @@
 .letters {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 14px;
-  margin-bottom: 36px;
-  font-family: var(--font-display);
-  font-size: 18px;
+  gap: 2px 4px;
+  margin-bottom: 40px;
 }
 
 .letters a {
+  min-width: 32px;
+  padding: 4px 6px;
+  border: 1px solid var(--rule);
+  font-stretch: 70%;
+  font-weight: 800;
+  font-size: 17px;
+  text-align: center;
   color: var(--paper-dim);
 }
 
 .letters a:hover {
-  color: var(--accent);
+  border-color: var(--accent);
+  color: var(--paper);
 }
 
 .index {
-  columns: 3 300px;
-  column-gap: 56px;
+  display: flex;
+  flex-direction: column;
+  gap: 48px;
 }
 
 .group {
-  break-inside: avoid;
-  margin-bottom: 32px;
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 24px;
   scroll-margin-top: 24px;
 }
 
 .letter {
-  margin-bottom: 8px;
-  font-size: 40px;
-  font-weight: 300;
-  font-style: italic;
+  position: sticky;
+  top: 16px;
+  align-self: start;
+  font-size: 96px;
   color: var(--accent);
-  font-variation-settings: "opsz" 144;
 }
 
-.names {
+.tiles {
   list-style: none;
   margin: 0;
   padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 30px 20px;
 }
 
-/* Contents-page rows: name, dotted leader, count. */
-.names li {
+.tile {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 3px 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tile > :first-child {
+  margin-bottom: 8px;
+  transition: transform 180ms ease;
+}
+
+.tile:hover > :first-child {
+  transform: translateY(-3px);
 }
 
 .name {
-  font-family: var(--font-display);
-  font-size: 17px;
-  font-variation-settings: "opsz" 24;
+  font-size: 15px;
+  font-stretch: 92%;
+  font-weight: 650;
+  line-height: 1.2;
 }
 
-.name:hover {
+.tile:hover .name {
   color: var(--accent);
 }
 
-.leader {
-  flex: 1;
-  border-bottom: 1px dotted var(--rule-strong);
-  transform: translateY(-4px);
+.count {
+  font-size: 10.5px;
+  color: var(--muted);
+  text-transform: uppercase;
 }
 
-.count {
-  color: var(--muted);
-  font-size: 11px;
-  white-space: nowrap;
+@media (max-width: 640px) {
+  .group {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .letter {
+    position: static;
+    font-size: 56px;
+  }
+
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

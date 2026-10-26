@@ -2,13 +2,14 @@
  * The only module that touches files inside the music library.
  *
  * Read-only by construction: it lists directories, stats files, parses tags,
- * reads a 42-byte header, and reads cover images, and nothing else. A static test
+ * reads a 42-byte header, reads cover images and CUE sheets, and nothing else. A static test
  * (`src/safety/read-only.test.ts`) fails if write-capable APIs appear here.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { type IAudioMetadata, parseFile } from 'music-metadata';
 import { assertInsideTestSandbox } from '../config/sandbox.ts';
+import { type CueSheet, decodeCueBytes, parseCueSheet } from '../metadata/cue.ts';
 import { FLAC_HEADER_BYTES, flacAudioMd5 } from '../metadata/flac-md5.ts';
 import { ART_SUBFOLDERS, chooseFolderArtwork, IMAGE_EXTENSIONS } from '../metadata/folder-art.ts';
 import { resolveInsideRoot } from './resolve-inside-root.ts';
@@ -75,7 +76,15 @@ export interface LibraryReader {
   findFolderArtwork(relDir: string): Promise<string | null>;
   /** Reads an image file, or returns null if it is larger than `maxBytes`. */
   readImage(relPath: string, maxBytes: number): Promise<Uint8Array | null>;
+  /**
+   * The CUE sheet next to an audio file that names it in a FILE line (or the
+   * only sheet in the folder), parsed; null if there is none.
+   */
+  readCueSheetFor(relPath: string): Promise<CueSheet | null>;
 }
+
+/** CUE sheets are a few KB; anything far larger is not one. */
+const MAX_CUE_BYTES = 512 * 1024;
 
 export function createLibraryReader(root: string): LibraryReader {
   assertInsideTestSandbox(root);
@@ -192,7 +201,41 @@ export function createLibraryReader(root: string): LibraryReader {
     return readHeader(absolute, st.size);
   }
 
-  return { root: canonicalRoot, stats, walk, readAudio, findFolderArtwork, readImage };
+  async function readCueSheetFor(relPath: string): Promise<CueSheet | null> {
+    const relDir = path.dirname(relPath) === '.' ? '' : path.dirname(relPath);
+    const dir = resolveInsideRoot(canonicalRoot, relDir);
+    const audioName = path.basename(relPath).toLowerCase();
+    const sheets: CueSheet[] = [];
+    for (const entry of await readSortedDir(dir)) {
+      if (
+        !entry.isFile() ||
+        entry.name.startsWith('.') ||
+        path.extname(entry.name).toLowerCase() !== '.cue'
+      ) {
+        continue;
+      }
+      const bytes = await readImage(path.join(relDir, entry.name), MAX_CUE_BYTES);
+      if (bytes === null) continue;
+      const sheet = parseCueSheet(decodeCueBytes(bytes));
+      if (
+        sheet.files.some((f) => path.basename(f.replaceAll('\\', '/')).toLowerCase() === audioName)
+      ) {
+        return sheet;
+      }
+      sheets.push(sheet);
+    }
+    return sheets.length === 1 ? (sheets[0] ?? null) : null;
+  }
+
+  return {
+    root: canonicalRoot,
+    stats,
+    walk,
+    readAudio,
+    findFolderArtwork,
+    readImage,
+    readCueSheetFor,
+  };
 }
 
 async function readSortedDir(dir: string): Promise<fs.Dirent[]> {

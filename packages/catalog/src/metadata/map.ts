@@ -53,10 +53,14 @@ export function toCatalogRecord(metadata: IAudioMetadata, relPath: string): Cata
 
   const albumArtist =
     clean(common.albumartist) ?? (common.compilation ? VARIOUS_ARTISTS : (artists[0] ?? null));
-  const albumTitle = clean(common.album);
+  // A title that is only a pressing code, like "(CDP 7 46384 2) [1st UK]",
+  // says nothing about the album: fall back to the folder name instead.
+  const taggedAlbum = clean(common.album);
+  const albumTitle = taggedAlbum && isPressingOnly(taggedAlbum) ? null : taggedAlbum;
   const mbid = clean(common.musicbrainz_albumid)?.toLowerCase() ?? null;
   const albumDir = albumFolder(relPath);
-  const year = parseYear(common.year, common.date);
+  const fromFolder = albumTitle ? null : folderTitle(albumDir);
+  const year = parseYear(common.year, common.date) ?? fromFolder?.year ?? null;
 
   const groupKey = mbid
     ? `mbid:${mbid}`
@@ -90,7 +94,7 @@ export function toCatalogRecord(metadata: IAudioMetadata, relPath: string): Cata
     album: {
       groupKey,
       // Untagged files are grouped by folder so they remain browsable.
-      title: albumTitle ?? folderTitle(albumDir),
+      title: albumTitle ?? fromFolder?.title ?? 'Unknown Album',
       albumArtist,
       year,
       musicbrainzAlbumId: mbid,
@@ -112,16 +116,30 @@ export function albumFolder(relPath: string): string {
 }
 
 /**
- * A readable album title from a folder path. Folders named only by their
- * pressing, like "(CDP 7 46034 2) [1st UK]" under "1973 The Dark Side Of The
- * Moon", borrow the parent folder's name: "1973 The Dark Side Of The Moon
- * (CDP 7 46034 2) [1st UK]".
+ * A readable album title (and year) from a folder path, for files without
+ * album tags. Bracketed pressing details are dropped (they are shown as the
+ * album's edition instead) and a leading year becomes the album year:
+ * "1970 Paranoid [1991 Japan TECP-23893]" → "Paranoid", 1970. A folder named
+ * only by its pressing, like "(CDP 7 46034 2) [1st UK]", uses its parent.
  */
-export function folderTitle(albumDir: string): string {
+export function folderTitle(albumDir: string): { title: string; year: number | null } {
   const base = path.basename(albumDir);
-  if (base === '') return 'Unknown Album';
+  if (base === '') return { title: 'Unknown Album', year: null };
   const parent = path.basename(path.dirname(albumDir));
-  return /^\s*[([]/.test(base) && parent !== '' && parent !== '.' ? `${parent} ${base}` : base;
+  const name = /^\s*[([{]/.test(base) && parent !== '' && parent !== '.' ? parent : base;
+  const stripped = name
+    .replace(/[([{][^()[\]{}]*[)\]}]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/[\s\-–.]+$/, '')
+    .trim();
+  const yearMatch = /^(\d{4})\s*[-–.]?\s+(.+)$/.exec(stripped);
+  const year = yearMatch ? Number(yearMatch[1]) : null;
+  const title = (yearMatch?.[2] ?? stripped).trim();
+  return title === '' ? { title: name, year: null } : { title, year };
+}
+
+function isPressingOnly(title: string): boolean {
+  return title.replace(/[([{][^()[\]{}]*[)\]}]/g, '').trim() === '';
 }
 
 function clean(value: string | null | undefined): string | null {

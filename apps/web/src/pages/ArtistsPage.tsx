@@ -2,6 +2,7 @@ import type { ArtistSummary } from '@sonic-archive/contracts';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useDeferredValue } from 'react';
 import { Link, useSearchParams } from 'react-router';
+import { Mosaic } from '../components/Mosaic.tsx';
 import { Pager } from '../components/Pager.tsx';
 import { ErrorMessage, Loading, NoResults } from '../components/States.tsx';
 import { api } from '../lib/api.ts';
@@ -84,19 +85,20 @@ export function ArtistsPage() {
               className={styles.group}
               aria-labelledby={`h-${letter}`}
             >
-              <h2 id={`h-${letter}`} className={styles.letter}>
+              <h2 id={`h-${letter}`} className={`display ${styles.letter}`}>
                 {letter}
               </h2>
-              <ul className={styles.names}>
+              <ul className={styles.tiles}>
                 {list.map((artist) => (
                   <li key={artist.id}>
-                    <Link to={`/artists/${artist.id}`} className={styles.name}>
-                      {artist.name}
+                    <Link to={`/artists/${artist.id}`} className={styles.tile}>
+                      <Mosaic artworkIds={artist.artworkIds} name={artist.name} />
+                      <span className={styles.name}>{artist.name}</span>
+                      <span className={`mono ${styles.count}`}>
+                        {plural(artist.albumCount, 'release')} ·{' '}
+                        {plural(artist.trackCount, 'track')}
+                      </span>
                     </Link>
-                    <span className={styles.leader} aria-hidden="true" />
-                    <span className={`mono ${styles.count}`}>
-                      {plural(artist.albumCount, 'album')}
-                    </span>
                   </li>
                 ))}
               </ul>

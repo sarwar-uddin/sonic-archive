@@ -1,7 +1,6 @@
 // Fonts are bundled from npm (@fontsource): no requests to font CDNs.
-import '@fontsource-variable/fraunces/opsz.css';
-import '@fontsource-variable/fraunces/opsz-italic.css';
-import '@fontsource-variable/inter-tight/wght.css';
+// Archivo with both axes: width (62–125%) and weight (100–900).
+import '@fontsource-variable/archivo/wdth.css';
 import '@fontsource/ibm-plex-mono/400.css';
 import '@fontsource/ibm-plex-mono/500.css';
 import './styles/global.css';

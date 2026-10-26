@@ -30,6 +30,7 @@ import type {
 } from '@sonic-archive/contracts';
 import type Database from 'better-sqlite3';
 import { toFtsQuery } from '../db/search-index.ts';
+import { editionFromPath } from '../metadata/edition.ts';
 import { nameKey } from '../text/normalize.ts';
 
 type Row = Record<string, unknown>;
@@ -44,7 +45,8 @@ const ALBUM_STATS_CTE = `
            max(t.sample_rate) AS max_sample_rate,
            max(t.bit_depth) AS max_bit_depth,
            min(coalesce(t.lossless, 0)) AS all_lossless,
-           coalesce(sum(f.size), 0) AS total_bytes
+           coalesce(sum(f.size), 0) AS total_bytes,
+           min(f.rel_path) AS sample_path
     FROM tracks t JOIN files f ON f.id = t.file_id
     WHERE f.status != 'missing' AND t.album_id IS NOT NULL
     GROUP BY t.album_id
@@ -53,7 +55,12 @@ const ALBUM_STATS_CTE = `
 const ALBUM_COLUMNS = `
   a.id, a.title, a.year, a.artwork_id, a.album_artist_id, ar.name AS artist_name,
   s.track_count, s.duration_ms, s.codecs, s.max_sample_rate, s.max_bit_depth,
-  s.all_lossless, s.total_bytes`;
+  s.all_lossless, s.total_bytes, s.sample_path`;
+
+/** See ALBUM_KINDS in contracts: what counts as a whole release. */
+export const RELEASE_MIN_TRACKS = 3;
+export const RELEASE_MIN_MS = 20 * 60 * 1000;
+const IS_RELEASE_SQL = `(s.track_count >= ${RELEASE_MIN_TRACKS} OR s.duration_ms >= ${RELEASE_MIN_MS})`;
 
 const ALBUM_SORT_SQL: Record<AlbumListQuery['sort'], (dir: string) => string> = {
   artist: (d) =>
@@ -158,6 +165,9 @@ export function createCatalogQueries(sqlite: Database.Database): CatalogQueries 
       params.push(query.codec);
     }
     if (query.lossless !== undefined) where.push(`s.all_lossless = ${query.lossless ? 1 : 0}`);
+    if (query.kind !== undefined) {
+      where.push(query.kind === 'release' ? IS_RELEASE_SQL : `NOT ${IS_RELEASE_SQL}`);
+    }
     if (query.minSampleRate !== undefined) {
       where.push('s.max_sample_rate >= ?');
       params.push(query.minSampleRate);
@@ -388,7 +398,16 @@ export function createCatalogQueries(sqlite: Database.Database): CatalogQueries 
         : `sort_key(coalesce(ar.sort_name, ar.name)) ${dir}`;
     const base = `WITH ${CREDITED_CTE}
       SELECT ar.id, ar.name, count(DISTINCT c.album_id) AS album_count,
-             count(DISTINCT c.track_id) AS track_count
+             count(DISTINCT c.track_id) AS track_count,
+             (SELECT group_concat(artwork_id) FROM (
+                SELECT a2.artwork_id, min(a2.album_artist_id IS NOT ar.id) AS appearance,
+                       min(a2.year) AS year
+                FROM albums a2
+                WHERE a2.artwork_id IS NOT NULL
+                  AND a2.id IN (SELECT c2.album_id FROM credited c2 WHERE c2.artist_id = ar.id)
+                GROUP BY a2.artwork_id
+                ORDER BY appearance, year
+                LIMIT 4)) AS artwork_ids
       FROM artists ar JOIN credited c ON c.artist_id = ar.id ${whereSql}
       GROUP BY ar.id`;
     const rows = all(`${base} ORDER BY ${orderBy}, ar.id LIMIT ? OFFSET ?`, [
@@ -551,6 +570,8 @@ export function createCatalogQueries(sqlite: Database.Database): CatalogQueries 
 }
 
 function toAlbumSummary(row: Row): AlbumSummary {
+  const trackCount = Number(row.track_count ?? 0);
+  const durationMs = Number(row.duration_ms ?? 0);
   return {
     id: Number(row.id),
     title: String(row.title),
@@ -560,12 +581,14 @@ function toAlbumSummary(row: Row): AlbumSummary {
         : { id: Number(row.album_artist_id), name: String(row.artist_name) },
     year: nullableNumber(row.year),
     artworkId: nullableNumber(row.artwork_id),
-    trackCount: Number(row.track_count ?? 0),
-    durationMs: Number(row.duration_ms ?? 0),
+    trackCount,
+    durationMs,
     codecs: typeof row.codecs === 'string' && row.codecs !== '' ? row.codecs.split(',') : [],
     maxSampleRate: nullableNumber(row.max_sample_rate),
     maxBitDepth: nullableNumber(row.max_bit_depth),
     lossless: Number(row.all_lossless ?? 0) === 1,
+    kind: trackCount >= RELEASE_MIN_TRACKS || durationMs >= RELEASE_MIN_MS ? 'release' : 'loose',
+    edition: typeof row.sample_path === 'string' ? editionFromPath(row.sample_path) : [],
   };
 }
 
@@ -603,6 +626,10 @@ function toArtistSummary(row: Row): ArtistSummary {
     name: String(row.name),
     albumCount: Number(row.album_count),
     trackCount: Number(row.track_count),
+    artworkIds:
+      typeof row.artwork_ids === 'string' && row.artwork_ids !== ''
+        ? row.artwork_ids.split(',').map(Number)
+        : [],
   };
 }
 

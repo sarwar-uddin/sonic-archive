@@ -10,8 +10,17 @@
   responses are cached for a minute and never refetched on window focus.
 - **Plain CSS with custom properties and CSS Modules**, no Tailwind. Design
   tokens live in `src/styles/global.css`; each component owns its module.
-- **Fonts from npm (`@fontsource`)**: Fraunces (display), Inter Tight (UI),
-  IBM Plex Mono (technical figures). There are no requests to font CDNs.
+- **Fonts from npm (`@fontsource`)**: one variable grotesque, **Archivo**
+  (width 62–125%, weight 100–900), stretched from condensed poster headlines
+  to wide catalogue labels, plus **IBM Plex Mono** for catalogue numbers and
+  technical figures. There are no requests to font CDNs. (Revised after the
+  full-library scan: the original Fraunces/Inter Tight pairing read as a
+  literary magazine; the collection of first pressings, Japanese OBI-strip
+  CDs, jazz and heavy/prog sleeves called for poster-like condensed type.)
+- **Collection-led motifs**: artist divider cards standing in the grid like
+  record-shop bins; an OBI strip beside the album cover; pressing details
+  parsed from folder names shown as edition chips; artist cover mosaics;
+  blurred-cover hero backdrops.
   Verified: a headless browser loading every page made zero non-local
   requests.
 - **Filters live in the URL** (`?genre=3&res=24bit`), so views can be

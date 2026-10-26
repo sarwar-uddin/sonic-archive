@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import type { CatalogQueries } from '@sonic-archive/catalog';
 import {
   type ApiError,
@@ -109,7 +110,7 @@ export function createApp(deps: AppDeps): express.Express {
     res.json(found(queries.getScan(parse(idParams, req.params).id)));
   });
 
-  api.get('/artwork/:id', async (req, res) => {
+  api.get('/artwork/:id', async (req, res, next) => {
     const art = found(queries.getArtwork(parse(idParams, req.params).id));
     const { size } = parse(artworkQuery, req.query);
     // Defence in depth: the name comes from our own database, but it is still
@@ -125,7 +126,11 @@ export function createApp(deps: AppDeps): express.Express {
     res.type('image/webp');
     // Content-addressed: the bytes behind an artwork URL never change.
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    res.sendFile(file);
+    // Served relative to its directory: `send` refuses absolute paths that
+    // pass through a dot-directory, and the cache lives under ~/.cache.
+    res.sendFile(path.basename(file), { root: path.dirname(file) }, (error) => {
+      if (error && !res.headersSent) next(new NotFound());
+    });
   });
 
   api.use((_req, _res, next) => next(new NotFound()));

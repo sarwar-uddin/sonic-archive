@@ -2,11 +2,12 @@ import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router';
 import { AlbumGrid } from '../components/AlbumGrid.tsx';
 import { ErrorMessage, Loading } from '../components/States.tsx';
-import { api } from '../lib/api.ts';
+import { api, artworkUrl } from '../lib/api.ts';
 import { plural } from '../lib/format.ts';
 import { useDocumentTitle } from '../lib/use-document-title.ts';
+import styles from './ArtistPage.module.css';
 import { NotFoundPage } from './NotFoundPage.tsx';
-import styles from './page.module.css';
+import page from './page.module.css';
 
 export function ArtistPage() {
   const id = Number(useParams().id);
@@ -26,29 +27,48 @@ export function ArtistPage() {
   }
 
   const { name, albums, appearsOn, trackCount } = artist.data;
+  const backdrop = [...albums, ...appearsOn].find((a) => a.artworkId !== null)?.artworkId ?? null;
+  const years = albums.map((a) => a.year).filter((y): y is number => y !== null);
+  const span =
+    years.length > 0
+      ? Math.min(...years) === Math.max(...years)
+        ? String(years[0])
+        : `${Math.min(...years)}–${Math.max(...years)}`
+      : null;
+
   return (
     <>
-      <header className={styles.header}>
-        <div className={styles.headline}>
-          <p className="kicker">Artist</p>
-          <h1 className={styles.title}>{name}</h1>
-          <p className="kicker">
-            {plural(albums.length + appearsOn.length, 'album')} · {plural(trackCount, 'track')}
+      <header className={styles.hero}>
+        {backdrop !== null && (
+          <img
+            className={styles.backdrop}
+            src={artworkUrl(backdrop, 'sm')}
+            alt=""
+            aria-hidden="true"
+          />
+        )}
+        <div className={styles.heroInner}>
+          <p className="kicker">Artist{span ? ` · ${span}` : ''}</p>
+          <h1 className={page.title}>{name}</h1>
+          <p className={`mono ${styles.facts}`}>
+            <span>{plural(albums.length, 'release')}</span>
+            {appearsOn.length > 0 && <span>{plural(appearsOn.length, 'appearance')}</span>}
+            <span>{plural(trackCount, 'track')}</span>
           </p>
         </div>
       </header>
       {albums.length > 0 && (
-        <section aria-labelledby="own-albums">
-          <h2 id="own-albums" className="visually-hidden">
-            Albums
+        <section aria-labelledby="discography">
+          <h2 id="discography" className={page.sectionTitle}>
+            Discography <span className={page.count}>{albums.length}</span>
           </h2>
           <AlbumGrid albums={albums} />
         </section>
       )}
       {appearsOn.length > 0 && (
-        <section className={styles.section} aria-labelledby="appears-on">
-          <h2 id="appears-on" className={styles.sectionTitle}>
-            Appears on <span className={styles.count}>{appearsOn.length}</span>
+        <section className={page.section} aria-labelledby="appears-on">
+          <h2 id="appears-on" className={page.sectionTitle}>
+            Appears on <span className={page.count}>{appearsOn.length}</span>
           </h2>
           <AlbumGrid albums={appearsOn} />
         </section>

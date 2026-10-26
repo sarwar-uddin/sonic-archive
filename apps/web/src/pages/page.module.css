@@ -5,45 +5,60 @@
   flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 16px 32px;
-  padding-bottom: 20px;
-  margin-bottom: 28px;
+  gap: 20px 40px;
+  padding-bottom: 22px;
+  margin-bottom: 32px;
   border-bottom: 1px solid var(--rule);
 }
 
 .headline {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  min-width: 0;
 }
 
+/* The big condensed headline, sized like a sleeve title. */
 .title {
-  font-size: clamp(36px, 6vw, 64px);
-  font-variation-settings: "opsz" 144;
-  font-weight: 300;
+  font-size: clamp(52px, 9vw, 132px);
+  font-stretch: 64%;
+  font-weight: 860;
+  line-height: 0.84;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
 }
 
 .title em {
-  font-style: italic;
-  color: var(--paper-dim);
+  font-style: normal;
+  color: var(--accent);
+}
+
+.count {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 16px;
+  gap: 12px 14px;
   align-items: flex-end;
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
 }
 
 .field select,
 .field input {
-  min-width: 132px;
+  min-width: 128px;
   padding: 7px 10px;
   background: var(--ink-raised);
   border: 1px solid var(--rule);
@@ -58,34 +73,14 @@
 
 .clear {
   padding: 7px 0;
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--accent);
   background: none;
   border: 0;
   cursor: pointer;
-}
-
-.section {
-  margin-top: 56px;
-}
-
-.sectionTitle {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  padding-bottom: 10px;
-  margin-bottom: 24px;
-  border-bottom: 1px solid var(--rule);
-  font-size: 26px;
-  font-style: italic;
-  font-weight: 300;
-}
-
-.sectionTitle .count {
-  font-family: var(--font-ui);
-  font-style: normal;
-  font-size: 13px;
-  color: var(--muted);
 }
 
 .pager {
@@ -93,25 +88,92 @@
   align-items: center;
   justify-content: center;
   gap: 20px;
-  margin-top: 48px;
-  font-size: 13px;
+  margin-top: 56px;
+  font-family: var(--font-mono);
+  font-size: 12px;
   color: var(--muted);
 }
 
 .pager a {
   padding: 6px 12px;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--rule-strong);
   color: var(--paper);
 }
 
 .pager a:hover {
-  border-color: var(--rule-strong);
+  border-color: var(--paper-dim);
 }
 
 .pager span[aria-disabled="true"] {
   padding: 6px 12px;
   border: 1px solid transparent;
   opacity: 0.35;
+}
+
+/* Segmented switch: Releases / Loose tracks / Everything. */
+.segments {
+  display: inline-flex;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.segments a {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-stretch: 90%;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.segments a + a {
+  border-left: 1px solid var(--rule-strong);
+}
+
+.segments a:hover {
+  color: var(--paper);
+}
+
+.segments a[aria-current="page"] {
+  background: var(--paper);
+  color: var(--black);
+}
+
+.segments .mono {
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px 24px;
+  margin-bottom: 36px;
+}
+
+.section {
+  margin-top: 64px;
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding-bottom: 8px;
+  margin-bottom: 22px;
+  border-bottom: 2px solid var(--paper);
+  font-size: clamp(26px, 3.2vw, 40px);
+  font-stretch: 66%;
+  font-weight: 820;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
 @media (max-width: 600px) {

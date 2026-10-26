@@ -6,38 +6,59 @@
 
 .masthead {
   padding: 0 var(--gutter);
+  background: var(--black);
   border-bottom: 1px solid var(--rule);
-  background: linear-gradient(to bottom, var(--ink-sunken), var(--ink));
 }
 
-.top {
+.bar {
   max-width: var(--measure);
   margin: 0 auto;
   display: grid;
-  grid-template-columns: auto 1fr minmax(200px, 320px);
+  grid-template-columns: auto 1fr minmax(200px, 340px);
   align-items: center;
-  gap: 24px;
-  padding: 22px 0 14px;
+  gap: 28px;
+  padding: 14px 0 10px;
 }
 
 .wordmark {
-  font-family: var(--font-display);
-  font-size: 28px;
-  font-weight: 500;
-  letter-spacing: -0.02em;
-  font-variation-settings: "opsz" 72;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 30px;
   white-space: nowrap;
 }
 
-.wordmark em {
-  font-style: italic;
-  font-weight: 300;
-  color: var(--accent);
+.wordmark .display {
+  font-weight: 900;
+  font-stretch: 62%;
+  line-height: 1;
 }
 
-.edition {
-  padding-left: 24px;
-  border-left: 1px solid var(--rule);
+/* A record label: red disc with a spindle hole. */
+.label {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--black) 0 2.5px, var(--accent) 3px 100%);
+  box-shadow:
+    0 0 0 3px var(--black),
+    0 0 0 4px var(--rule-strong);
+}
+
+.plate {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.plate span + span::before {
+  content: "/";
+  margin-right: 18px;
+  color: var(--rule-strong);
 }
 
 .search input {
@@ -46,7 +67,7 @@
   background: var(--ink-raised);
   border: 1px solid var(--rule);
   border-radius: var(--radius);
-  font-size: 14px;
+  font-size: 13.5px;
 }
 
 .search input::placeholder {
@@ -61,19 +82,20 @@
   max-width: var(--measure);
   margin: 0 auto;
   display: flex;
-  gap: 28px;
+  gap: 30px;
   overflow-x: auto;
   scrollbar-width: none;
 }
 
 .navLink {
-  padding: 10px 0 12px;
+  padding: 6px 0 10px;
   border-bottom: 2px solid transparent;
   font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
+  font-stretch: 88%;
+  font-weight: 650;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--paper-dim);
+  color: var(--muted);
   white-space: nowrap;
 }
 
@@ -91,7 +113,7 @@
   width: 100%;
   max-width: calc(var(--measure) + 2 * var(--gutter));
   margin: 0 auto;
-  padding: 40px var(--gutter) 80px;
+  padding: 36px var(--gutter) 96px;
 }
 
 .main:focus {
@@ -99,18 +121,24 @@
 }
 
 .footer {
-  padding: 24px var(--gutter);
+  padding: 22px var(--gutter);
   border-top: 1px solid var(--rule);
   text-align: center;
 }
 
-@media (max-width: 760px) {
-  .top {
-    grid-template-columns: 1fr;
-    gap: 12px;
+@media (max-width: 860px) {
+  .bar {
+    grid-template-columns: 1fr auto;
   }
 
-  .edition {
+  .plate {
     display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .bar {
+    grid-template-columns: 1fr;
+    gap: 10px;
   }
 }

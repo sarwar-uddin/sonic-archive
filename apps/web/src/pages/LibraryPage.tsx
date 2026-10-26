@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { AlbumGrid } from '../components/AlbumGrid.tsx';
 import { Pager } from '../components/Pager.tsx';
 import { EmptyLibrary, ErrorMessage, Loading, NoResults } from '../components/States.tsx';
@@ -8,7 +8,14 @@ import { plural, shortCodec } from '../lib/format.ts';
 import { useDocumentTitle } from '../lib/use-document-title.ts';
 import styles from './page.module.css';
 
-const LIMIT = 48;
+const LIMIT = 96;
+
+const KINDS = [
+  { key: 'release', label: 'Releases' },
+  { key: 'loose', label: 'Loose tracks' },
+  { key: 'all', label: 'Everything' },
+] as const;
+type KindKey = (typeof KINDS)[number]['key'];
 
 /** Sort menu entries map onto the API's sort + order pair. */
 const SORTS = {
@@ -36,6 +43,7 @@ export function LibraryPage() {
   const decade = Number(params.get('decade')) || undefined;
   const resolution = RESOLUTIONS[params.get('res') as keyof typeof RESOLUTIONS]?.params ?? {};
   const lossless = params.get('lossless');
+  const kind = (KINDS.find((k) => k.key === params.get('kind'))?.key ?? 'release') as KindKey;
 
   const query: Params = {
     sort: sort.sort,
@@ -47,6 +55,7 @@ export function LibraryPage() {
     lossless: lossless === 'yes' ? 'true' : lossless === 'no' ? 'false' : undefined,
     yearFrom: decade,
     yearTo: decade === undefined ? undefined : decade + 9,
+    kind: kind === 'all' ? undefined : kind,
     ...resolution,
   };
 
@@ -57,6 +66,27 @@ export function LibraryPage() {
   });
   const facets = useQuery({ queryKey: ['facets'], queryFn: ({ signal }) => api.facets(signal) });
   const stats = useQuery({ queryKey: ['stats'], queryFn: ({ signal }) => api.stats(signal) });
+  // Per-kind totals for the switch (one-row queries with the same filters).
+  const kindCounts = useQuery({
+    queryKey: ['album-kind-counts', { ...query, kind: undefined, page: 1 }],
+    queryFn: async ({ signal }) => {
+      const base = { ...query, kind: undefined, page: 1, limit: 1 };
+      const [release, loose] = await Promise.all([
+        api.albums({ ...base, kind: 'release' }, signal),
+        api.albums({ ...base, kind: 'loose' }, signal),
+      ]);
+      return { release: release.total, loose: loose.total, all: release.total + loose.total };
+    },
+    placeholderData: keepPreviousData,
+  });
+  const kindHref = (key: KindKey) => {
+    const next = new URLSearchParams(params);
+    if (key === 'release') next.delete('kind');
+    else next.set('kind', key);
+    next.delete('page');
+    const q = next.toString();
+    return q ? `/?${q}` : '/';
+  };
 
   if (stats.data && stats.data.tracks === 0) return <EmptyLibrary />;
 
@@ -76,10 +106,33 @@ export function LibraryPage() {
         <div className={styles.headline}>
           <p className="kicker">The collection</p>
           <h1 className={styles.title}>
-            {albums.data ? plural(albums.data.total, 'album') : 'Albums'}
-            {filtering && <em> filtered</em>}
+            {kind === 'loose' ? 'Loose tracks' : kind === 'all' ? 'Everything' : 'Releases'}
           </h1>
+          <p className={styles.count}>
+            {albums.data
+              ? plural(
+                  albums.data.total,
+                  kind === 'loose' ? 'entry' : 'release',
+                  kind === 'loose' ? 'entries' : 'releases',
+                )
+              : '…'}
+            {filtering && ' · filtered'}
+          </p>
         </div>
+        <nav className={styles.segments} aria-label="What to show">
+          {KINDS.map((k) => (
+            <Link
+              key={k.key}
+              to={kindHref(k.key)}
+              aria-current={kind === k.key ? 'page' : undefined}
+            >
+              {k.label}
+              {kindCounts.data && <span className="mono">{kindCounts.data[k.key]}</span>}
+            </Link>
+          ))}
+        </nav>
+      </header>
+      <div className={styles.toolbar}>
         <form
           className={styles.controls}
           aria-label="Sort and filter albums"
@@ -163,7 +216,7 @@ export function LibraryPage() {
             </button>
           )}
         </form>
-      </header>
+      </div>
 
       {albums.isPending ? (
         <Loading label="Pulling records" />
@@ -173,7 +226,7 @@ export function LibraryPage() {
         <NoResults>No albums match these filters.</NoResults>
       ) : (
         <>
-          <AlbumGrid albums={albums.data.items} />
+          <AlbumGrid albums={albums.data.items} groupByArtist={sort.sort === 'artist'} />
           <Pager page={albums.data.page} limit={albums.data.limit} total={albums.data.total} />
         </>
       )}

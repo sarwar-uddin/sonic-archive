@@ -14,9 +14,10 @@
 }
 
 .artists a {
-  font-family: var(--font-display);
-  font-size: 24px;
-  font-weight: 300;
+  font-size: 30px;
+  font-stretch: 66%;
+  font-weight: 820;
+  text-transform: uppercase;
 }
 
 .artists a:hover {
@@ -48,8 +49,8 @@
 }
 
 .trackTitle {
-  font-family: var(--font-display);
-  font-size: 17px;
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .trackTitle a:hover {

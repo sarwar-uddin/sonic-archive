@@ -264,6 +264,58 @@ describe('first scan of the fixture library', () => {
   });
 });
 
+describe('CUE sheets', () => {
+  it('fills album details for an untagged single-file image from its sheet', async () => {
+    const dir = path.join(lib.root, 'Hollow Hill', '1971 Image Rip [1990 Japan ABCD-123]');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.copyFileSync(path.join(lib.root, UNTAGGED), path.join(dir, 'Hollow Hill - Image Rip.flac'));
+    // A decoy sheet for another file, and the matching one (Windows-1252 é).
+    fs.writeFileSync(path.join(dir, 'other.cue'), 'TITLE "Wrong"\nFILE "elsewhere.flac" WAVE\n');
+    fs.writeFileSync(
+      path.join(dir, 'Hollow Hill - Image Rip.cue'),
+      Buffer.concat([
+        Buffer.from(
+          'REM GENRE "Doom"\r\nREM DATE 1971\r\nPERFORMER "Hollow Hill"\r\nTITLE "Image Rip (Caf',
+        ),
+        Buffer.from([0xe9]),
+        Buffer.from(
+          ')"\r\nFILE "Hollow Hill - Image Rip.flac" WAVE\r\n  TRACK 01 AUDIO\r\n    TITLE "One"\r\n    INDEX 01 00:00:00\r\n',
+        ),
+      ]),
+    );
+
+    await scan();
+    expect(
+      one(
+        `SELECT a.title, a.year, ar.name AS artist FROM albums a
+         JOIN artists ar ON ar.id = a.album_artist_id WHERE a.title LIKE 'Image Rip%'`,
+      ),
+    ).toEqual({ title: 'Image Rip (Café)', year: 1971, artist: 'Hollow Hill' });
+    expect(one("SELECT count(*) AS n FROM genres WHERE name = 'Doom'")).toEqual({ n: 1 });
+  });
+
+  it('lets tags win over the sheet', async () => {
+    const dir = path.join(lib.root, 'Aurora Field/Northern Lines (2001)');
+    fs.writeFileSync(
+      path.join(dir, 'album.cue'),
+      'PERFORMER "Someone Else"\nTITLE "Other Title"\nFILE "01 First Light.flac" WAVE\n',
+    );
+    await scan();
+    expect(one("SELECT count(*) AS n FROM albums WHERE title = 'Other Title'")).toEqual({ n: 0 });
+  });
+
+  it('cleans folder-derived titles when there is no sheet', async () => {
+    const dir = path.join(lib.root, 'Bare', '1985 Plain Rip [1st UK, ABC 1]');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.copyFileSync(path.join(lib.root, UNTAGGED), path.join(dir, 'disc.flac'));
+    await scan();
+    expect(one("SELECT title, year FROM albums WHERE title = 'Plain Rip'")).toEqual({
+      title: 'Plain Rip',
+      year: 1985,
+    });
+  });
+});
+
 describe('rescanning', () => {
   it('is idempotent: identical rows and ids', async () => {
     await scan();

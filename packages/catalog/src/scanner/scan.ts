@@ -31,6 +31,7 @@ import {
 import { rebuildSearchIndex } from '../db/search-index.ts';
 import type { AudioFileEntry, LibraryReader, WalkEvent } from '../fs/library-reader.ts';
 import { PathSafetyError, resolveInsideRoot } from '../fs/resolve-inside-root.ts';
+import { withCueSheet } from '../metadata/cue.ts';
 import { albumFolder, type CatalogRecord, toCatalogRecord } from '../metadata/map.ts';
 
 export interface ScanDeps {
@@ -84,6 +85,9 @@ export interface ScanSummary {
 }
 
 const MAX_REPORTED_PROBLEMS = 100;
+
+/** Files at least this long are checked for a CUE sheet even when tagged. */
+const CUE_IMAGE_MIN_SECONDS = 20 * 60;
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
@@ -254,7 +258,14 @@ async function processFile(
   let audioMd5: string | null;
   try {
     const read = await reader.readAudio(entry.relPath);
-    record = toCatalogRecord(read.metadata, entry.relPath);
+    let metadata = read.metadata;
+    // Untagged or disc-length files are usually single-file CD images: their
+    // album details live in the CUE sheet next to them.
+    if (!metadata.common.album || (metadata.format.duration ?? 0) >= CUE_IMAGE_MIN_SECONDS) {
+      const sheet = await reader.readCueSheetFor(entry.relPath).catch(() => null);
+      if (sheet) metadata = withCueSheet(metadata, sheet);
+    }
+    record = toCatalogRecord(metadata, entry.relPath);
     audioMd5 = read.audioMd5;
   } catch (error) {
     // One unreadable file is recorded and skipped; it never stops the scan.

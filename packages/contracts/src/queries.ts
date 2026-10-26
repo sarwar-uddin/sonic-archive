@@ -21,6 +21,12 @@ const page = {
 
 export const ALBUM_SORTS = ['artist', 'title', 'year', 'added'] as const;
 
+/**
+ * `release`: a real record (3+ tracks, or 20+ minutes, which covers a CD image
+ * kept as one file). `loose`: odd tracks kept from records not owned whole.
+ */
+export const ALBUM_KINDS = ['release', 'loose'] as const;
+
 export const albumListQuery = z.strictObject({
   q: text.optional(),
   artistId: id.optional(),
@@ -31,6 +37,7 @@ export const albumListQuery = z.strictObject({
   lossless: flag.optional(),
   minSampleRate: positive.optional(),
   minBitDepth: positive.optional(),
+  kind: z.enum(ALBUM_KINDS).optional(),
   sort: z.enum(ALBUM_SORTS).default('artist'),
   ...page,
 });

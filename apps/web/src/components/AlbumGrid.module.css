@@ -3,37 +3,97 @@
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
-  gap: 40px 24px;
+  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  gap: 36px 22px;
+}
+
+/* Record-shop divider card: paper stock with a raised tab, heavy name. */
+.dividerItem {
+  container-type: inline-size;
+}
+
+.divider {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  aspect-ratio: 1;
+  margin-top: 12px;
+  padding: 14% 10% 9%;
+  background: var(--obi);
+  color: var(--black);
+  border-radius: 0 3px 3px 3px;
+  box-shadow: 0 18px 40px -26px rgb(0 0 0 / 0.95);
+}
+
+.dividerTab {
+  position: absolute;
+  top: -12px;
+  left: 0;
+  width: 46%;
+  height: 13px;
+  background: var(--obi);
+  border-radius: 3px 3px 0 0;
+}
+
+.dividerName {
+  font-size: clamp(22px, 17cqi, 54px);
+  font-stretch: 62%;
+  font-weight: 900;
+  line-height: 0.86;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.dividerCount {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  color: #6b6559;
+}
+
+a.divider:hover {
+  background: var(--paper);
+}
+
+a.divider:hover .dividerTab {
+  background: var(--accent);
 }
 
 .card {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
+  min-width: 0;
 }
 
 .coverLink {
   display: block;
   margin-bottom: 10px;
-  transition: transform 160ms ease;
+  transition:
+    transform 180ms ease,
+    filter 180ms ease;
 }
 
 .coverLink:hover {
-  transform: translateY(-2px);
+  transform: translateY(-3px);
+  filter: brightness(1.06);
 }
 
 .title {
-  font-size: 17px;
+  font-size: 15px;
+  font-stretch: 92%;
+  font-weight: 650;
   line-height: 1.2;
-  font-variation-settings: "opsz" 24;
+  overflow-wrap: anywhere;
 }
 
 .title a:hover,
 .artist a:hover {
-  text-decoration: underline;
-  text-decoration-color: var(--accent);
-  text-underline-offset: 3px;
+  color: var(--accent);
 }
 
 .artist {
@@ -43,26 +103,28 @@
 
 .meta {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 2px;
-  font-size: 12px;
+  margin-top: 4px;
   color: var(--muted);
 }
 
-.spec {
+.meta .mono {
   font-size: 11px;
+}
+
+.edition {
+  font-size: 10.5px;
   color: var(--muted);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.hiRes {
-  color: var(--accent);
-}
-
-@media (max-width: 420px) {
+@media (max-width: 440px) {
   .grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 28px 16px;
+    gap: 28px 14px;
   }
 }

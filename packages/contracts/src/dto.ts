@@ -29,6 +29,9 @@ export interface AlbumSummary {
   readonly maxBitDepth: number | null;
   /** True only if every track is lossless. */
   readonly lossless: boolean;
+  readonly kind: 'release' | 'loose';
+  /** Pressing details from the folder name, e.g. ["1991 Japan TECP-23893 Teichiku"]. */
+  readonly edition: readonly string[];
 }
 
 export interface TrackSummary {
@@ -81,6 +84,8 @@ export interface AlbumDetail extends AlbumSummary {
 export interface ArtistSummary extends ArtistRef {
   readonly albumCount: number;
   readonly trackCount: number;
+  /** Up to four covers, own albums first, for a mosaic. */
+  readonly artworkIds: readonly number[];
 }
 
 export interface ArtistDetail extends ArtistRef {
