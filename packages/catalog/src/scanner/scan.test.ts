@@ -100,7 +100,8 @@ describe('first scan of the fixture library', () => {
       false,
     );
     expect(reader.stats.skippedHidden).toBeGreaterThanOrEqual(3);
-    expect(reader.stats.skippedNonAudio).toBe(1);
+    // notes.txt plus four images (cover/folder/back.jpg, Artwork/Front.png)
+    expect(reader.stats.skippedNonAudio).toBe(5);
   });
 
   it('groups tracks into albums', async () => {
@@ -186,20 +187,43 @@ describe('first scan of the fixture library', () => {
     ]);
   });
 
-  it('stores each distinct embedded cover once, in the cache dir', async () => {
+  it('stores each distinct cover once, in the cache dir', async () => {
     await scan();
-    const artwork = query<{ sha256: string; cache_file: string; mime: string }>(
-      'SELECT sha256, cache_file, mime FROM artwork',
-    );
-    expect(artwork).toHaveLength(2); // red cover (shared by 2 tracks) + blue cover
+    const artwork = query<{ cache_file: string }>('SELECT cache_file FROM artwork');
     for (const art of artwork) {
-      expect(art.mime).toBe('image/jpeg');
       expect(fs.existsSync(path.join(cacheDir, 'artwork', art.cache_file))).toBe(true);
     }
-    expect(query('SELECT title FROM albums WHERE artwork_id IS NOT NULL ORDER BY title')).toEqual([
-      { title: 'Double Album' },
-      { title: 'Northern Lines' },
+    // Red is embedded in two tracks but stored once. Blue (embedded in
+    // Drift CD1) is never stored, because Drift's folder.jpg wins.
+    expect(
+      query(
+        `SELECT a.title, w.source, w.mime FROM albums a JOIN artwork w ON w.id = a.artwork_id
+         ORDER BY a.title`,
+      ),
+    ).toEqual([
+      { title: 'Double Album', source: 'folder', mime: 'image/jpeg' },
+      { title: 'Format Sampler', source: 'folder', mime: 'image/png' },
+      { title: 'Hi-Res Session', source: 'folder', mime: 'image/jpeg' },
+      { title: 'Northern Lines', source: 'embedded', mime: 'image/jpeg' },
     ]);
+    expect(artwork).toHaveLength(4);
+  });
+
+  it('still records that a track embeds art when folder art is used', async () => {
+    await scan();
+    expect(one("SELECT has_embedded_art FROM tracks WHERE title = 'Side A'")).toEqual({
+      has_embedded_art: 1,
+    });
+  });
+
+  it('skips unreadable folder art without failing the file', async () => {
+    if (RUNNING_AS_ROOT) return;
+    fs.chmodSync(path.join(lib.root, 'Basalt Quartet/Hi-Res Session (2020)/cover.jpg'), 0o000);
+    const summary = await scan();
+    expect(summary.counters.errors).toBe(1); // only the garbage file
+    expect(one("SELECT artwork_id FROM albums WHERE title = 'Hi-Res Session'")).toEqual({
+      artwork_id: null,
+    });
   });
 
   it('reads the FLAC audio MD5, matching identical audio under different tags', async () => {

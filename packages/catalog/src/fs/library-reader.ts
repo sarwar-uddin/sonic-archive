@@ -2,7 +2,7 @@
  * The only module that touches files inside the music library.
  *
  * Read-only by construction: it lists directories, stats files, parses tags,
- * and reads a 42-byte header, and nothing else. A static test
+ * reads a 42-byte header, and reads cover images, and nothing else. A static test
  * (`src/safety/read-only.test.ts`) fails if write-capable APIs appear here.
  */
 import fs from 'node:fs';
@@ -10,6 +10,7 @@ import path from 'node:path';
 import { type IAudioMetadata, parseFile } from 'music-metadata';
 import { assertInsideTestSandbox } from '../config/sandbox.ts';
 import { FLAC_HEADER_BYTES, flacAudioMd5 } from '../metadata/flac-md5.ts';
+import { ART_SUBFOLDERS, chooseFolderArtwork, IMAGE_EXTENSIONS } from '../metadata/folder-art.ts';
 import { resolveInsideRoot } from './resolve-inside-root.ts';
 
 export const AUDIO_EXTENSIONS: ReadonlySet<string> = new Set([
@@ -70,6 +71,10 @@ export interface LibraryReader {
    */
   walk(subpath?: string): AsyncGenerator<WalkEvent>;
   readAudio(relPath: string): Promise<AudioRead>;
+  /** Root-relative path of the album cover image in `relDir`, if any. */
+  findFolderArtwork(relDir: string): Promise<string | null>;
+  /** Reads an image file, or returns null if it is larger than `maxBytes`. */
+  readImage(relPath: string, maxBytes: number): Promise<Uint8Array | null>;
 }
 
 export function createLibraryReader(root: string): LibraryReader {
@@ -161,7 +166,33 @@ export function createLibraryReader(root: string): LibraryReader {
     return { metadata, audioMd5 };
   }
 
-  return { root: canonicalRoot, stats, walk, readAudio };
+  async function findFolderArtwork(relDir: string): Promise<string | null> {
+    const dir = resolveInsideRoot(canonicalRoot, relDir);
+    const candidates: string[] = [];
+    for (const entry of await readSortedDir(dir)) {
+      if (entry.name.startsWith('.')) continue;
+      if (entry.isFile() && IMAGE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
+        candidates.push(entry.name);
+      } else if (entry.isDirectory() && ART_SUBFOLDERS.has(entry.name.toLowerCase())) {
+        for (const inner of await readSortedDir(path.join(dir, entry.name))) {
+          if (inner.isFile() && !inner.name.startsWith('.')) {
+            candidates.push(path.join(entry.name, inner.name));
+          }
+        }
+      }
+    }
+    const chosen = chooseFolderArtwork(candidates);
+    return chosen === null ? null : path.join(relDir, chosen);
+  }
+
+  async function readImage(relPath: string, maxBytes: number): Promise<Uint8Array | null> {
+    const absolute = resolveInsideRoot(canonicalRoot, relPath);
+    const st = await fs.promises.lstat(absolute);
+    if (!st.isFile() || st.size > maxBytes) return null;
+    return readHeader(absolute, st.size);
+  }
+
+  return { root: canonicalRoot, stats, walk, readAudio, findFolderArtwork, readImage };
 }
 
 async function readSortedDir(dir: string): Promise<fs.Dirent[]> {
@@ -188,6 +219,7 @@ async function entryType(
   return st.isFile() ? 'file' : 'other';
 }
 
+/** Reads the first `length` bytes of a file (opened read-only). */
 async function readHeader(absolute: string, length: number): Promise<Uint8Array> {
   const handle = await fs.promises.open(absolute, 'r');
   try {

@@ -51,6 +51,8 @@ cover() { ff -f lavfi -i "color=c=$1:s=64x64" -frames:v 1 -q:v 8 "$2"; }
 
 cover 0x8b2e2e "$work/cover-red.jpg"
 cover 0x2e4a8b "$work/cover-blue.jpg"
+cover 0x2e8b4a "$work/cover-green.jpg"
+cover 0xc9a227 "$work/cover-yellow.jpg"
 
 # --- A plain two-track album, both tracks embedding the same cover --------
 album="$out/Aurora Field/Northern Lines (2001)"
@@ -74,6 +76,8 @@ flac_track 523 0.25 96000 24 "$album/01 Overture.flac" \
 tone 587 0.5 44100 s16p "$album/02 Coda.m4a" -c:a alac \
   -metadata title=Coda -metadata artist="Basalt Quartet" -metadata album_artist="Basalt Quartet" \
   -metadata album="Hi-Res Session" -metadata date=2020 -metadata track=2/2 -metadata genre=Classical
+# Folder art, no embedded art.
+cp "$work/cover-green.jpg" "$album/cover.jpg"
 
 # --- Other containers and lossy formats -------------------------------------
 album="$out/Cinder Collective/Format Sampler (2015)"
@@ -87,6 +91,10 @@ tone 392 0.5 44100 s16p "$album/03 Lossy.mp3" -c:a libmp3lame -b:a 128k -id3v2_v
   -metadata title=Lossy -metadata track=3 "${common[@]}"
 tone 415 0.5 48000 s16 "$album/04 Open.opus" -c:a libopus -b:a 64k \
   -metadata title=Open -metadata track=4 "${common[@]}"
+# Cover in an art subfolder; back.jpg must never be chosen.
+mkdir -p "$album/Artwork"
+ff -f lavfi -i "color=c=0x6a2e8b:s=64x64" -frames:v 1 "$album/Artwork/Front.png"
+cp "$work/cover-red.jpg" "$album/back.jpg"
 
 # --- Two discs, identified by a MusicBrainz release id ----------------------
 album="$out/Drift/Double Album (1999)"
@@ -98,6 +106,8 @@ flac_track 294 0.5 44100 16 "$album/CD2/01 Side C.flac" \
   "TITLE=Side C" "ARTIST=Drift" "ALBUMARTIST=Drift" "ALBUM=Double Album" "DATE=1999" \
   "TRACKNUMBER=1" "DISCNUMBER=2" "DISCTOTAL=2" "MUSICBRAINZ_ALBUMID=$mbid"
 metaflac --import-picture-from="3||||$work/cover-blue.jpg" "$album/CD1/01 Side A.flac"
+# Album-level folder art above the disc folders wins over the embedded cover.
+cp "$work/cover-yellow.jpg" "$album/folder.jpg"
 
 # --- Compilation: several artists, multi-value ARTIST, a composer -----------
 album="$out/Various Artists/Harbour Lights (2010)"

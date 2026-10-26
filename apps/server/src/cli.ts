@@ -109,7 +109,7 @@ async function scan(args: string[]): Promise<number> {
   const plan = [
     `library  ${library.root}`,
     `scope    ${values.subpath ?? '(entire library)'}`,
-    `mode     ${values['dry-run'] ? 'dry run (no file contents read, nothing written)' : mode}`,
+    `mode     ${values['dry-run'] ? 'dry run (no file contents read, catalog unchanged)' : mode}`,
   ].join('\n');
 
   if (!values.confirm) {

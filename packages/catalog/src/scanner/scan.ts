@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { storeArtwork } from '../cache/artwork-cache.ts';
+import { MAX_ARTWORK_BYTES, storeArtwork } from '../cache/artwork-cache.ts';
 import {
   type Credit,
+  type NewArtwork,
   upsertAlbum,
   upsertArtist,
   upsertArtwork,
@@ -27,7 +28,7 @@ import {
 } from '../db/library-repository.ts';
 import type { AudioFileEntry, LibraryReader, WalkEvent } from '../fs/library-reader.ts';
 import { PathSafetyError, resolveInsideRoot } from '../fs/resolve-inside-root.ts';
-import { type CatalogRecord, toCatalogRecord } from '../metadata/map.ts';
+import { albumFolder, type CatalogRecord, toCatalogRecord } from '../metadata/map.ts';
 
 export interface ScanDeps {
   readonly db: CatalogDb;
@@ -50,7 +51,7 @@ export interface ScanOptions {
   readonly mode: 'incremental' | 'full';
   /** Limit the scan to this root-relative folder. Never marks files missing. */
   readonly subpath?: string;
-  /** Walk and compare with the catalog, but read no file contents and write nothing. */
+  /** Walk and compare with the catalog; read no file contents and change no catalog rows. */
   readonly dryRun?: boolean;
   readonly allowMassMissing?: boolean;
   readonly massMissing?: MassMissingThreshold;
@@ -138,6 +139,7 @@ async function realScan(
     return { scanId, status, scopeSubpath, counters, swept, reason, problems, totalBytes };
   };
 
+  const context: ScanContext = { rootId, scanId, mode: options.mode, folderArt: new Map() };
   try {
     await forEachConcurrent(
       reader.walk(scopeSubpath ?? ''),
@@ -153,7 +155,7 @@ async function realScan(
         counters.seen++;
         totalBytes += event.size;
         options.onProgress?.({ seen: counters.seen, currentPath: event.relPath });
-        await processFile(deps, { rootId, scanId, mode: options.mode }, event, counters, report);
+        await processFile(deps, context, event, counters, report);
       },
     );
   } catch (error) {
@@ -197,6 +199,8 @@ interface ScanContext {
   readonly rootId: number;
   readonly scanId: number;
   readonly mode: ScanOptions['mode'];
+  /** Folder artwork per directory, looked up once per scan. */
+  readonly folderArt: Map<string, Promise<NewArtwork | null>>;
 }
 
 async function processFile(
@@ -246,8 +250,12 @@ async function processFile(
     return;
   }
 
+  // Folder art (cover.jpg, folder.jpg, …) wins over embedded art: it is usually
+  // the curated scan, and it gives every track of the album the same cover.
   // Written to the cache dir before the transaction; harmless if it rolls back.
-  const artwork = record.picture ? storeArtwork(cacheDir, record.picture) : null;
+  const artwork =
+    (await findFolderArt(deps, ctx, entry.relPath)) ??
+    (record.picture ? storeArtwork(cacheDir, record.picture) : null);
 
   db.transaction((tx) => {
     const file = upsertFile(tx, { ...fileBase, audioMd5, status: 'present', errorMessage: null });
@@ -272,6 +280,33 @@ async function processFile(
   });
 
   countChange(existing, statUnchanged, counters);
+}
+
+function findFolderArt(
+  deps: ScanDeps,
+  ctx: ScanContext,
+  relPath: string,
+): Promise<NewArtwork | null> {
+  const ownDir = path.dirname(relPath) === '.' ? '' : path.dirname(relPath);
+  // The file's own folder first, then the album folder above CD1/Disc 2.
+  const dirs = [...new Set([ownDir, albumFolder(relPath)])];
+  const lookup = (dir: string) => {
+    let pending = ctx.folderArt.get(dir);
+    if (!pending) {
+      pending = (async () => {
+        const image = await deps.reader.findFolderArtwork(dir);
+        if (image === null) return null;
+        const data = await deps.reader.readImage(image, MAX_ARTWORK_BYTES);
+        return data === null ? null : storeArtwork(deps.cacheDir, { data }, 'folder');
+      })().catch(() => null); // unreadable art means no cover, not a failed file
+      ctx.folderArt.set(dir, pending);
+    }
+    return pending;
+  };
+  return dirs.reduce<Promise<NewArtwork | null>>(
+    async (found, dir) => (await found) ?? lookup(dir),
+    Promise.resolve(null),
+  );
 }
 
 function countChange(

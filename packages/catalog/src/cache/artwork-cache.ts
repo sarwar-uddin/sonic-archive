@@ -23,7 +23,7 @@ const SIGNATURES: readonly { mime: string; ext: string; matches: (b: Uint8Array)
 ];
 
 /**
- * Copies an embedded cover into the app's cache dir (never the library),
+ * Copies a cover image into the app's cache dir (never the library),
  * named by its SHA-256 so identical covers are stored once.
  *
  * The type is taken from the image bytes, not the tag's claim, and only
@@ -31,7 +31,12 @@ const SIGNATURES: readonly { mime: string; ext: string; matches: (b: Uint8Array)
  * browser, and a tag claiming `image/svg+xml` or `text/html` must never
  * become active content.
  */
-export function storeArtwork(cacheDir: string, picture: PictureRecord): NewArtwork | null {
+export function storeArtwork(
+  cacheDir: string,
+  /** `mime` (the tag's claim) is ignored; the type comes from the bytes. */
+  picture: Pick<PictureRecord, 'data'> & Partial<Pick<PictureRecord, 'mime'>>,
+  source: NewArtwork['source'] = 'embedded',
+): NewArtwork | null {
   const { data } = picture;
   if (data.length === 0 || data.length > MAX_ARTWORK_BYTES) return null;
   const type = SIGNATURES.find((s) => s.matches(data));
@@ -56,7 +61,7 @@ export function storeArtwork(cacheDir: string, picture: PictureRecord): NewArtwo
     width: null,
     height: null,
     byteSize: data.length,
-    source: 'embedded',
+    source,
     cacheFile,
   };
 }

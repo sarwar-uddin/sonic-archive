@@ -352,3 +352,51 @@ describe('tracks', () => {
     expect(getTrackByFileId(db, file.id)).toBeUndefined();
   });
 });
+
+describe('id allocation', () => {
+  it('does not consume ids when an upsert finds an existing row', () => {
+    const root = ensureLibraryRoot(db, '/music');
+    ensureLibraryRoot(db, '/music');
+    const scan = newScan(root.id);
+    const file = {
+      rootId: root.id,
+      relPath: 'a.flac',
+      size: 1,
+      mtimeMs: 1,
+      audioMd5: null,
+      status: 'present',
+      errorMessage: null,
+      scanId: scan.id,
+    } as const;
+    for (let i = 0; i < 5; i++) {
+      upsertFile(db, { ...file, size: i + 1 });
+      upsertArtist(db, 'Same Artist');
+      upsertGenre(db, 'Jazz');
+      upsertAlbum(db, {
+        groupKey: 'tag:x|y',
+        title: 'Y',
+        albumArtistId: null,
+        year: null,
+        musicbrainzAlbumId: null,
+        totalDiscs: null,
+        artworkId: null,
+      });
+    }
+    // The next new row of each kind gets id 2: no ids were burned above.
+    expect(ensureLibraryRoot(db, '/other').id).toBe(2);
+    expect(upsertFile(db, { ...file, relPath: 'b.flac' }).id).toBe(2);
+    expect(upsertArtist(db, 'Another Artist')).toBe(2);
+    expect(upsertGenre(db, 'Rock')).toBe(2);
+    expect(
+      upsertAlbum(db, {
+        groupKey: 'tag:x|z',
+        title: 'Z',
+        albumArtistId: null,
+        year: null,
+        musicbrainzAlbumId: null,
+        totalDiscs: null,
+        artworkId: null,
+      }),
+    ).toBe(2);
+  });
+});

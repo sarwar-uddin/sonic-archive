@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { nameKey } from '../text/normalize.ts';
 import type { CatalogExecutor } from './database.ts';
 import {
@@ -11,10 +11,18 @@ import {
   trackGenres,
   tracks,
 } from './schema.ts';
-import { excluded } from './sql-helpers.ts';
 
 export type NewArtwork = Omit<typeof artwork.$inferInsert, 'id'>;
 export type TrackRow = typeof tracks.$inferSelect;
+
+/*
+ * Upserts here look the row up by its natural key and then UPDATE or INSERT,
+ * instead of using INSERT … ON CONFLICT DO UPDATE. SQLite's AUTOINCREMENT
+ * consumes an id on every conflicting insert attempt, even one that ends in
+ * an update, so rescanning 50k tracks would leave enormous id gaps.
+ * better-sqlite3 is synchronous, so nothing can interleave between the
+ * lookup and the write.
+ */
 
 /**
  * Returns the id of the artist matching `name` by `nameKey`, creating it if
@@ -27,36 +35,43 @@ export function upsertArtist(
   sortName: string | null = null,
 ): number {
   const key = requireKey(name, 'Artist');
+  const existing = db
+    .select({ id: artists.id, sortName: artists.sortName })
+    .from(artists)
+    .where(eq(artists.nameKey, key))
+    .get();
+  if (existing) {
+    // Fill a missing sort name; leave everything else as first recorded.
+    if (existing.sortName === null && sortName !== null) {
+      db.update(artists).set({ sortName }).where(eq(artists.id, existing.id)).run();
+    }
+    return existing.id;
+  }
   return db
     .insert(artists)
     .values({ name: name.trim(), sortName, nameKey: key })
-    .onConflictDoUpdate({
-      target: artists.nameKey,
-      // Fill a missing sort name; leave everything else as first recorded.
-      set: { sortName: sql`coalesce(${artists.sortName}, ${excluded(artists.sortName)})` },
-    })
     .returning({ id: artists.id })
     .get().id;
 }
 
 export function upsertGenre(db: CatalogExecutor, name: string): number {
   const key = requireKey(name, 'Genre');
-  return db
-    .insert(genres)
-    .values({ name: name.trim(), nameKey: key })
-    .onConflictDoUpdate({ target: genres.nameKey, set: { nameKey: excluded(genres.nameKey) } })
-    .returning({ id: genres.id })
-    .get().id;
+  const existing = db.select({ id: genres.id }).from(genres).where(eq(genres.nameKey, key)).get();
+  return (
+    existing?.id ??
+    db.insert(genres).values({ name: name.trim(), nameKey: key }).returning({ id: genres.id }).get()
+      .id
+  );
 }
 
 /** Artwork is content-addressed: identical images share one row. */
 export function upsertArtwork(db: CatalogExecutor, input: NewArtwork): number {
-  return db
-    .insert(artwork)
-    .values(input)
-    .onConflictDoUpdate({ target: artwork.sha256, set: { sha256: excluded(artwork.sha256) } })
-    .returning({ id: artwork.id })
-    .get().id;
+  const existing = db
+    .select({ id: artwork.id })
+    .from(artwork)
+    .where(eq(artwork.sha256, input.sha256))
+    .get();
+  return existing?.id ?? db.insert(artwork).values(input).returning({ id: artwork.id }).get().id;
 }
 
 export interface AlbumUpsertInput {
@@ -75,22 +90,22 @@ export interface AlbumUpsertInput {
  * nullable fields are only filled in, never cleared.
  */
 export function upsertAlbum(db: CatalogExecutor, input: AlbumUpsertInput): number {
-  return db
-    .insert(albums)
-    .values(input)
-    .onConflictDoUpdate({
-      target: albums.groupKey,
-      set: {
-        title: excluded(albums.title),
-        albumArtistId: sql`coalesce(${excluded(albums.albumArtistId)}, ${albums.albumArtistId})`,
-        year: sql`coalesce(${excluded(albums.year)}, ${albums.year})`,
-        musicbrainzAlbumId: sql`coalesce(${excluded(albums.musicbrainzAlbumId)}, ${albums.musicbrainzAlbumId})`,
-        artworkId: sql`coalesce(${excluded(albums.artworkId)}, ${albums.artworkId})`,
-        totalDiscs: sql`nullif(max(coalesce(${excluded(albums.totalDiscs)}, 0), coalesce(${albums.totalDiscs}, 0)), 0)`,
-      },
+  const existing = db.select().from(albums).where(eq(albums.groupKey, input.groupKey)).get();
+  if (!existing) return db.insert(albums).values(input).returning({ id: albums.id }).get().id;
+
+  const discs = Math.max(input.totalDiscs ?? 0, existing.totalDiscs ?? 0);
+  db.update(albums)
+    .set({
+      title: input.title,
+      albumArtistId: input.albumArtistId ?? existing.albumArtistId,
+      year: input.year ?? existing.year,
+      musicbrainzAlbumId: input.musicbrainzAlbumId ?? existing.musicbrainzAlbumId,
+      artworkId: input.artworkId ?? existing.artworkId,
+      totalDiscs: discs === 0 ? null : discs,
     })
-    .returning({ id: albums.id })
-    .get().id;
+    .where(eq(albums.id, existing.id))
+    .run();
+  return existing.id;
 }
 
 export interface Credit {
@@ -120,12 +135,18 @@ export function upsertTrack(db: CatalogExecutor, input: TrackUpsertInput): numbe
   const { fileId: _, ...updatable } = values;
 
   return db.transaction((tx) => {
-    const trackId = tx
-      .insert(tracks)
-      .values(values)
-      .onConflictDoUpdate({ target: tracks.fileId, set: updatable })
-      .returning({ id: tracks.id })
-      .get().id;
+    const existing = tx
+      .select({ id: tracks.id })
+      .from(tracks)
+      .where(eq(tracks.fileId, values.fileId))
+      .get();
+    let trackId: number;
+    if (existing) {
+      tx.update(tracks).set(updatable).where(eq(tracks.id, existing.id)).run();
+      trackId = existing.id;
+    } else {
+      trackId = tx.insert(tracks).values(values).returning({ id: tracks.id }).get().id;
+    }
 
     tx.delete(trackArtists).where(eq(trackArtists.trackId, trackId)).run();
     const rows = positionCredits(credits).map((c) => ({ ...c, trackId }));

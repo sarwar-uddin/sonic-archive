@@ -1,7 +1,6 @@
 import { and, count, desc, eq, inArray, lt, ne } from 'drizzle-orm';
 import type { CatalogExecutor } from './database.ts';
 import { files, libraryRoots, type SCAN_MODES, type SCAN_STATUSES, scans } from './schema.ts';
-import { excluded } from './sql-helpers.ts';
 
 export type LibraryRoot = typeof libraryRoots.$inferSelect;
 export type Scan = typeof scans.$inferSelect;
@@ -9,10 +8,10 @@ export type FileRow = typeof files.$inferSelect;
 
 /** Returns the row for this root path, creating it on first use. */
 export function ensureLibraryRoot(db: CatalogExecutor, rootPath: string): LibraryRoot {
-  db.insert(libraryRoots).values({ path: rootPath }).onConflictDoNothing().run();
-  const row = db.select().from(libraryRoots).where(eq(libraryRoots.path, rootPath)).get();
-  if (!row) throw new Error(`Library root row missing after insert: ${rootPath}`);
-  return row;
+  return (
+    findLibraryRoot(db, rootPath) ??
+    db.insert(libraryRoots).values({ path: rootPath }).returning().get()
+  );
 }
 
 export function findLibraryRoot(db: CatalogExecutor, rootPath: string): LibraryRoot | undefined {
@@ -95,21 +94,29 @@ export function upsertFile(db: CatalogExecutor, input: FileUpsertInput): FileRow
     throw new Error(`mtimeMs must be whole milliseconds (got ${input.mtimeMs}).`);
   }
   const { scanId, ...values } = input;
+  // Look up, then update or insert (see catalog-repository.ts for why).
+  const existing = getFileByPath(db, input.rootId, input.relPath);
+  if (existing) {
+    const row = db
+      .update(files)
+      .set({
+        size: values.size,
+        mtimeMs: values.mtimeMs,
+        audioMd5: values.audioMd5,
+        status: values.status,
+        errorMessage: values.errorMessage,
+        lastSeenScanId: scanId,
+        missingSince: null,
+      })
+      .where(eq(files.id, existing.id))
+      .returning()
+      .get();
+    if (!row) throw new Error(`File row ${existing.id} vanished during update.`);
+    return row;
+  }
   return db
     .insert(files)
     .values({ ...values, firstSeenScanId: scanId, lastSeenScanId: scanId, missingSince: null })
-    .onConflictDoUpdate({
-      target: [files.rootId, files.relPath],
-      set: {
-        size: excluded(files.size),
-        mtimeMs: excluded(files.mtimeMs),
-        audioMd5: excluded(files.audioMd5),
-        status: excluded(files.status),
-        errorMessage: excluded(files.errorMessage),
-        lastSeenScanId: excluded(files.lastSeenScanId),
-        missingSince: null,
-      },
-    })
     .returning()
     .get();
 }
