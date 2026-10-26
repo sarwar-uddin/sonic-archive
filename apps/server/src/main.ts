@@ -2,6 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   ARTWORK_SUBDIR,
+  buildHealthReport,
   createCatalogQueries,
   loadConfig,
   migrateCatalog,
@@ -31,6 +32,7 @@ const database = openCatalogDatabase(dirs.dataDir, { readonly: true });
 
 const app = createApp({
   queries: createCatalogQueries(database.sqlite),
+  healthReport: () => buildHealthReport(database.sqlite),
   artworkDir: path.join(dirs.cacheDir, ARTWORK_SUBDIR),
   libraryRoot: library.status === 'configured' ? library.root : null,
   ...(webDist !== undefined && { webDist: path.resolve(webDist) }),

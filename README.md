@@ -46,6 +46,7 @@ All endpoints are `GET`, return JSON, and address resources by numeric id.
 | `/api/facets`                      | Genres, years, codecs, sample rates, bit depths                                                                                   |
 | `/api/artwork/:id`                 | Cover image from the cache                                                                                                        |
 | `/api/scans`, `/api/scans/:id`     | Scan history                                                                                                                      |
+| `/api/health-report`               | Missing/unreadable files, metadata issues, missing artwork, exact/probable duplicates, split albums                               |
 
 ## Changing the database schema
 
@@ -59,8 +60,16 @@ All endpoints are `GET`, return JSON, and address resources by numeric id.
 
 ## Status
 
-The MVP (milestones M0–M4) is complete: foundation, database, read-only
-scanner, API, and web frontend. Two real album folders have been
-sample-scanned (M2.5); the full-library scan is waiting for explicit
-approval. Later milestones: library health reports (M5), artwork thumbnails
-(M6), ratings and notes (M7), playlists (M8), and optional playback (M9).
+Milestones **M0–M5** are complete: foundation, database, read-only scanner,
+API, web frontend (the MVP), and library health reports. Two real album
+folders have been sample-scanned (M2.5); the full-library scan is waiting
+for explicit approval:
+
+```sh
+pnpm scan --confirm            # full library, incremental, read-only
+```
+
+Next candidates, each needing a design decision first: artwork thumbnails
+(M6, adds a native image library), ratings and notes (M7, the first API
+writes), playlists (M8), and optional playback (M9, browser codec support
+and transcoding).

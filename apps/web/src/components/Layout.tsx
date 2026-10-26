@@ -9,6 +9,7 @@ const NAV = [
   { to: '/', label: 'Albums', end: true },
   { to: '/artists', label: 'Artists', end: false },
   { to: '/tracks', label: 'Tracks', end: false },
+  { to: '/health', label: 'Health', end: false },
   { to: '/ledger', label: 'Ledger', end: false },
 ];
 

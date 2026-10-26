@@ -157,3 +157,54 @@ export interface ApiError {
     readonly issues?: readonly { readonly path: string; readonly message: string }[];
   };
 }
+
+export interface HealthTrackRef {
+  readonly trackId: number;
+  readonly title: string | null;
+  readonly displayArtist: string | null;
+  readonly durationMs: number | null;
+  readonly relPath: string;
+  readonly album: { readonly id: number; readonly title: string } | null;
+}
+
+export interface ReportSection<T> {
+  /** Total matching items; `items` may be capped. */
+  readonly total: number;
+  readonly items: readonly T[];
+}
+
+export interface AlbumIssues {
+  readonly album: { readonly id: number; readonly title: string; readonly artist: string | null };
+  /** Human-readable problems, e.g. "2 tracks without a title". */
+  readonly issues: readonly string[];
+}
+
+export interface HealthReport {
+  readonly missingFiles: ReportSection<{
+    readonly relPath: string;
+    readonly missingSince: string | null;
+    readonly track: HealthTrackRef | null;
+  }>;
+  readonly unreadableFiles: ReportSection<{
+    readonly relPath: string;
+    readonly error: string | null;
+  }>;
+  readonly missingArtwork: ReportSection<{
+    readonly id: number;
+    readonly title: string;
+    readonly artist: string | null;
+  }>;
+  readonly metadataIssues: ReportSection<AlbumIssues>;
+  /** Files whose decoded audio is bit-identical (same audio MD5). */
+  readonly exactDuplicates: ReportSection<{
+    readonly audioMd5: string;
+    readonly tracks: readonly HealthTrackRef[];
+  }>;
+  /** Same artist and title, durations within two seconds. */
+  readonly probableDuplicates: ReportSection<{ readonly tracks: readonly HealthTrackRef[] }>;
+  /** One album key whose tracks live in unrelated folders. */
+  readonly splitAlbums: ReportSection<{
+    readonly album: { readonly id: number; readonly title: string; readonly artist: string | null };
+    readonly folders: readonly string[];
+  }>;
+}

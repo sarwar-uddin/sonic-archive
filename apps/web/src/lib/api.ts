@@ -10,6 +10,7 @@ import type {
   ArtistSummary,
   Facets,
   Health,
+  HealthReport,
   Page,
   ScanRecord,
   SearchResults,
@@ -76,4 +77,5 @@ export const api = {
     get<ArtistDetail>(`artists/${id}`, undefined, signal),
   search: (q: string, signal?: AbortSignal) => get<SearchResults>('search', { q }, signal),
   scans: (signal?: AbortSignal) => get<ScanRecord[]>('scans', { limit: 20 }, signal),
+  healthReport: (signal?: AbortSignal) => get<HealthReport>('health-report', undefined, signal),
 };

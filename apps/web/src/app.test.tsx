@@ -167,3 +167,63 @@ describe('groupByInitial', () => {
     ]);
   });
 });
+
+describe('health page', () => {
+  it('summarizes problems and lists duplicate groups', async () => {
+    const empty = { total: 0, items: [] };
+    const track = (trackId: number, title: string, relPath: string) => ({
+      trackId,
+      title,
+      displayArtist: 'Aurora Field',
+      durationMs: 500,
+      relPath,
+      album: { id: 1, title: 'Northern Lines' },
+    });
+    mockApi({
+      stats,
+      'health-report': {
+        missingFiles: empty,
+        unreadableFiles: {
+          total: 1,
+          items: [{ relPath: 'Broken/garbage.flac', error: 'Invalid FLAC preamble' }],
+        },
+        missingArtwork: empty,
+        metadataIssues: {
+          total: 1,
+          items: [{ album: { id: 9, title: 'Untagged', artist: null }, issues: ['No year'] }],
+        },
+        exactDuplicates: {
+          total: 1,
+          items: [
+            {
+              audioMd5: 'f92951abe8308de3f54a91cda07e7faa',
+              tracks: [
+                track(1, 'First Light', 'A/01.flac'),
+                track(2, 'First Light (copy)', 'Dup/01.flac'),
+              ],
+            },
+          ],
+        },
+        probableDuplicates: empty,
+        splitAlbums: empty,
+      },
+    });
+    renderApp('/health');
+
+    const summary = within(await screen.findByRole('navigation', { name: 'Report sections' }));
+    expect(summary.getByRole('link', { name: /1\s*Exact duplicates/ })).toHaveAttribute(
+      'href',
+      '#exact',
+    );
+    expect(summary.getByRole('link', { name: /0\s*Missing files/ })).toBeInTheDocument();
+
+    const exact = within(screen.getByRole('region', { name: /Exact duplicates/ }));
+    expect(exact.getByText('f92951abe8308de3f54a91cda07e7faa')).toBeInTheDocument();
+    expect(exact.getByRole('link', { name: 'First Light (copy)' })).toHaveAttribute(
+      'href',
+      '/albums/1',
+    );
+    expect(screen.getByText('Every catalogued file is where it was.')).toBeInTheDocument();
+    expect(screen.getByText('Invalid FLAC preamble')).toBeInTheDocument();
+  });
+});

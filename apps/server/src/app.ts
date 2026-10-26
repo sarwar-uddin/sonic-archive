@@ -5,6 +5,7 @@ import {
   albumListQuery,
   artistListQuery,
   type Health,
+  type HealthReport,
   idParams,
   scanListQuery,
   searchQuery,
@@ -23,6 +24,8 @@ import {
 
 export interface AppDeps {
   readonly queries: CatalogQueries;
+  /** Builds the library health report (M5). */
+  readonly healthReport: () => HealthReport;
   /** `<cacheDir>/artwork`: the only directory files are served from. */
   readonly artworkDir: string;
   /** Canonical library root, or null when unconfigured. Only ever stat'ed. */
@@ -57,6 +60,10 @@ export function createApp(deps: AppDeps): express.Express {
       lastScan: queries.lastScan(),
     };
     res.json(body);
+  });
+
+  api.get('/health-report', (_req, res) => {
+    res.json(deps.healthReport());
   });
 
   api.get('/stats', (_req, res) => {

@@ -44,6 +44,7 @@ export {
 } from './fs/resolve-inside-root.ts';
 export { type CatalogRecord, toCatalogRecord } from './metadata/map.ts';
 export { type CatalogQueries, createCatalogQueries } from './read/catalog-queries.ts';
+export { buildHealthReport, REPORT_LIMIT } from './read/health-report.ts';
 export {
   DEFAULT_MASS_MISSING,
   type MassMissingThreshold,

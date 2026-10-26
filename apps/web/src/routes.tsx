@@ -3,6 +3,7 @@ import { Layout } from './components/Layout.tsx';
 import { AlbumPage } from './pages/AlbumPage.tsx';
 import { ArtistPage } from './pages/ArtistPage.tsx';
 import { ArtistsPage } from './pages/ArtistsPage.tsx';
+import { HealthPage } from './pages/HealthPage.tsx';
 import { LedgerPage } from './pages/LedgerPage.tsx';
 import { LibraryPage } from './pages/LibraryPage.tsx';
 import { NotFoundPage, RouteError } from './pages/NotFoundPage.tsx';
@@ -20,6 +21,7 @@ export const routes: RouteObject[] = [
       { path: 'artists/:id', element: <ArtistPage /> },
       { path: 'tracks', element: <TracksPage /> },
       { path: 'search', element: <SearchPage /> },
+      { path: 'health', element: <HealthPage /> },
       { path: 'ledger', element: <LedgerPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],

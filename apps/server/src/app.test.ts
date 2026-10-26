@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   ARTWORK_SUBDIR,
+  buildHealthReport,
   type CatalogDatabase,
   createCatalogQueries,
   createLibraryReader,
@@ -22,6 +23,7 @@ import type {
   ArtistSummary,
   Facets,
   Health,
+  HealthReport,
   Page,
   SearchResults,
   Stats,
@@ -50,6 +52,7 @@ beforeAll(async () => {
   reader = openCatalogDatabase(catalog.dataDir, { readonly: true });
   app = createApp({
     queries: createCatalogQueries(reader.sqlite),
+    healthReport: () => buildHealthReport(reader.sqlite),
     artworkDir: path.join(cacheDir, ARTWORK_SUBDIR),
     libraryRoot: lib.root,
   });
@@ -372,6 +375,47 @@ describe('GET /api/artwork/:id', () => {
   });
 });
 
+describe('GET /api/health-report', () => {
+  it("reports the fixture library's problems", async () => {
+    const body = (await api('/api/health-report')).body as HealthReport;
+    expect(body.missingFiles).toEqual({ total: 0, items: [] });
+    expect(body.unreadableFiles.items).toEqual([
+      { relPath: 'Broken/garbage.flac', error: expect.stringMatching(/FLAC/) },
+    ]);
+    expect(body.missingArtwork.items.map((a) => a.title)).toEqual([
+      'Ágætis Morgunn', // locale-aware: sorts with A
+      'Harbour Lights',
+      'Loose Copies',
+      'Untagged',
+      '夜明け',
+    ]);
+    expect(body.metadataIssues.items).toContainEqual({
+      album: { id: expect.any(Number), title: 'Untagged', artist: null },
+      issues: [
+        'No album tag: grouped by folder',
+        '1 track without a title',
+        '1 track without an artist',
+        '1 track without a track number',
+        'No year',
+      ],
+    });
+    expect(body.exactDuplicates.items).toEqual([
+      {
+        audioMd5: 'f92951abe8308de3f54a91cda07e7faa',
+        tracks: [
+          expect.objectContaining({
+            title: 'First Light',
+            relPath: expect.stringContaining('Northern Lines'),
+          }),
+          expect.objectContaining({ title: 'First Light (copy)' }),
+        ],
+      },
+    ]);
+    expect(body.probableDuplicates.total).toBe(0);
+    expect(body.splitAlbums.total).toBe(0);
+  });
+});
+
 describe('scans', () => {
   it('lists scan history', async () => {
     const res = await api('/api/scans');
@@ -398,6 +442,7 @@ describe('missing files', () => {
       await runScan(deps, { mode: 'incremental' });
       const missingApp = createApp({
         queries: createCatalogQueries(other.database.sqlite),
+        healthReport: () => buildHealthReport(other.database.sqlite),
         artworkDir: path.join(other.dataDir, 'cache', ARTWORK_SUBDIR),
         libraryRoot: copy.root,
       });
@@ -422,6 +467,7 @@ describe('production web app', () => {
     try {
       const webApp = createApp({
         queries: createCatalogQueries(reader.sqlite),
+        healthReport: () => buildHealthReport(reader.sqlite),
         artworkDir: path.join(cacheDir, ARTWORK_SUBDIR),
         libraryRoot: lib.root,
         webDist,
