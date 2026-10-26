@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { CatalogDatabase } from '../db/database.ts';
 import { createTempCatalog, type TempCatalog } from '../db/test-support.ts';
 import { createLibraryReader, type LibraryReader } from '../fs/library-reader.ts';
+import { createCatalogQueries } from '../read/catalog-queries.ts';
 import {
   copyFixtureLibrary,
   FIXTURE_AUDIO_COUNT,
@@ -633,6 +634,28 @@ describe('rip logs', () => {
     expect(logs().map((l) => l.rel_path)).toEqual([
       'Ember/Live Image (2010)/CD1/Ember - Live Image.log',
     ]);
+  });
+});
+
+describe('pressings', () => {
+  it('keeps a second pressing as its own album, linked to the first', async () => {
+    const first = path.join(lib.root, 'Aurora Field/Northern Lines (2001)');
+    const second = path.join(lib.root, 'Aurora Field/Northern Lines [2010 Japan ABC-123]');
+    fs.cpSync(first, second, { recursive: true });
+    await scan();
+    const queries = createCatalogQueries(catalog.database.sqlite);
+    const albums = query<{ id: number }>(
+      "SELECT id FROM albums WHERE title = 'Northern Lines' ORDER BY id",
+    );
+    expect(albums).toHaveLength(2);
+    const detail = queries.getAlbum(albums[0]?.id as number);
+    expect(detail?.pressings).toBe(2);
+    expect(detail?.otherPressings.map((a) => [a.id, a.edition])).toEqual([
+      [albums[1]?.id, ['2010 Japan ABC-123']],
+    ]);
+    // Albums with one pressing say so.
+    const loose = query<{ id: number }>("SELECT id FROM albums WHERE title = 'Loose Copies'");
+    expect(queries.getAlbum(loose[0]?.id as number)?.pressings).toBe(1);
   });
 });
 

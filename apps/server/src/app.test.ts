@@ -203,6 +203,7 @@ describe('GET /api/albums', () => {
         kind: 'loose', // 2 short tracks; see ALBUM_KINDS
         edition: [], // "(2020)" is a year, not an edition
         rip: null, // no rip log
+        pressings: 1,
       },
     ]);
   });

@@ -32,4 +32,27 @@ describe('editionFromPath', () => {
   ])('%s', (relPath, expected) => {
     expect(editionFromPath(relPath)).toEqual(expected);
   });
+  it.each([
+    [
+      'Metallica - Discography/Albums/1986 - Master Of Puppets/1986 Japan 32DP 448 (1st press)/a.flac',
+      'Master Of Puppets',
+      ['1986 Japan 32DP 448', '1st press'],
+    ],
+    [
+      'Megadeth/Studio Albums/1990 - Rust In Peace/1990 Capitol, CDP 7 91935 2, USA/a.flac',
+      'Rust In Peace',
+      ['1990 Capitol, CDP 7 91935 2, USA'],
+    ],
+    // The folder names the album itself: only its brackets are the edition.
+    [
+      'Death - Symbolic [Roadrunner Records, RR 8957-2]/01.flac',
+      'Symbolic',
+      ['Roadrunner Records, RR 8957-2'],
+    ],
+    // Loose tracks in an artist folder: the folder is not a pressing.
+    ['Radiohead/song.flac', 'Creep', []],
+    ['Radiohead/Disc 1/song.flac', 'Creep', []],
+  ])('names a pressing folder as a whole: %s', (relPath, title, expected) => {
+    expect(editionFromPath(relPath, title)).toEqual(expected);
+  });
 });

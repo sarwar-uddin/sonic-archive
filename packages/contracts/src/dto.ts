@@ -34,6 +34,8 @@ export interface AlbumSummary {
   readonly edition: readonly string[];
   /** What the album's rip logs say, worst disc first; null without logs. */
   readonly rip: RipVerdict | null;
+  /** How many pressings of this album the collection holds, this one included. */
+  readonly pressings: number;
 }
 
 /**
@@ -155,6 +157,8 @@ export interface AlbumDetail extends AlbumSummary {
   /** Scanned artwork in viewing order; empty when the folder has none. */
   readonly scans: readonly AlbumScan[];
   readonly ripLogs: readonly RipLogSummary[];
+  /** Other pressings of the same album in the collection (same artist and title). */
+  readonly otherPressings: readonly AlbumSummary[];
 }
 
 export interface ArtistSummary extends ArtistRef {

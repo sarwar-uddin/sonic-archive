@@ -156,6 +156,34 @@ describe('album page', () => {
     expect(await dialog.findByText(/All tracks accurately ripped/)).toBeInTheDocument();
   });
 
+  it('compares the pressings of an album in the collection', async () => {
+    const japan = {
+      ...albumSummary,
+      id: 8,
+      year: 1986,
+      edition: ['1986 Japan 32DP 448'],
+      rip: 'verified' as const,
+      pressings: 2,
+    };
+    mockApi({
+      'albums/7': { ...albumDetail, pressings: 2, otherPressings: [japan] },
+      stats,
+    });
+    renderApp('/albums/7');
+    const section = within(
+      await screen.findByRole('region', { name: 'Pressings in your collection' }),
+    );
+    const rows = section.getAllByRole('row').slice(1);
+    // Oldest first; this copy is marked and not linked.
+    expect(rows.map((r) => r.getAttribute('aria-current'))).toEqual([null, 'true']);
+    expect(section.getByRole('link', { name: '1986 Japan 32DP 448' })).toHaveAttribute(
+      'href',
+      '/albums/8',
+    );
+    expect(within(rows[0] as HTMLElement).getByText('Verified')).toBeInTheDocument();
+    expect(within(rows[1] as HTMLElement).getByText('This copy')).toBeInTheDocument();
+  });
+
   it('leaves out the scan section when the folder has none', async () => {
     mockApi({ 'albums/7': albumDetail, stats });
     renderApp('/albums/7');
@@ -185,6 +213,12 @@ describe('library page', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Basalt Quartet' })).toBeInTheDocument();
     // Pressing details from the folder name appear on the card.
     expect(screen.getByText('1st Japan · SICP-1234')).toBeInTheDocument();
+  });
+
+  it('notes albums held in more than one pressing', async () => {
+    mockApi({ albums: page([{ ...albumSummary, pressings: 2 }]), facets, stats });
+    renderApp('/');
+    expect(await screen.findByText('2 pressings in the collection')).toBeInTheDocument();
   });
 
   it('marks albums whose rip is verified', async () => {

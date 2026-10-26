@@ -36,6 +36,7 @@ import { toFtsQuery } from '../db/search-index.ts';
 import { editionFromPath } from '../metadata/edition.ts';
 import { albumRipVerdict, logDisc, parseRipLog } from '../metadata/rip-log.ts';
 import { classifyScan, compareScans } from '../metadata/scans.ts';
+import { workKey } from '../metadata/work.ts';
 import { nameKey } from '../text/normalize.ts';
 
 type Row = Record<string, unknown>;
@@ -162,7 +163,40 @@ export function createCatalogQueries(sqlite: Database.Database): CatalogQueries 
     }
     return ripCache.verdicts;
   };
-  const summarize = (row: Row) => toAlbumSummary(row, ripVerdicts().get(Number(row.id)) ?? null);
+  // Pressing groups: albums sharing an artist and title. Cached like rip
+  // verdicts, until the set of albums changes.
+  let pressingCache: { signature: string; groups: Map<number, number[]> } | null = null;
+  const pressingGroups = (): Map<number, number[]> => {
+    const sig = get(`SELECT count(*) AS n, coalesce(max(id), 0) AS m,
+      coalesce(total(length(title) + coalesce(album_artist_id, 0)), 0) AS s,
+      (SELECT count(*) FROM files WHERE status = 'missing') AS missing FROM albums`);
+    const signature = `${sig?.n}:${sig?.m}:${sig?.s}:${sig?.missing}`;
+    if (pressingCache?.signature !== signature) {
+      const byWork = new Map<string, number[]>();
+      for (const row of all(
+        `SELECT a.id, a.title, ar.name AS artist FROM albums a
+         LEFT JOIN artists ar ON ar.id = a.album_artist_id
+         WHERE a.id IN (SELECT album_id FROM tracks t JOIN files f ON f.id = t.file_id
+                        WHERE f.status != 'missing')`,
+      )) {
+        const key = workKey(nullableString(row.artist), String(row.title));
+        if (key === null) continue;
+        byWork.set(key, [...(byWork.get(key) ?? []), Number(row.id)]);
+      }
+      const groups = new Map<number, number[]>();
+      for (const ids of byWork.values()) {
+        if (ids.length > 1) for (const id of ids) groups.set(id, ids);
+      }
+      pressingCache = { signature, groups };
+    }
+    return pressingCache.groups;
+  };
+  const summarize = (row: Row) =>
+    toAlbumSummary(
+      row,
+      ripVerdicts().get(Number(row.id)) ?? null,
+      pressingGroups().get(Number(row.id))?.length ?? 1,
+    );
 
   /** Track ids matching free text, as an SQL fragment, or null for "no match possible". */
   const ftsTrackIds = (q: string) => {
@@ -327,6 +361,15 @@ export function createCatalogQueries(sqlite: Database.Database): CatalogQueries 
         [id],
       ).map((g) => ({ id: Number(g.id), name: String(g.name) })),
       discs: discs as Disc[],
+      otherPressings: selectAlbums(
+        {
+          where: ['a.id IN (SELECT value FROM json_each(?))', 'a.id != ?'],
+          params: [JSON.stringify(pressingGroups().get(id) ?? []), id],
+        },
+        ALBUM_SORT_SQL.year('ASC'),
+        100,
+        0,
+      ),
       ripLogs: all('SELECT id, rel_path, text FROM rip_logs WHERE album_id = ? ORDER BY rel_path', [
         id,
       ]).map((r): RipLogSummary => {
@@ -649,7 +692,7 @@ export function createCatalogQueries(sqlite: Database.Database): CatalogQueries 
   };
 }
 
-function toAlbumSummary(row: Row, rip: RipVerdict | null): AlbumSummary {
+function toAlbumSummary(row: Row, rip: RipVerdict | null, pressings: number): AlbumSummary {
   const trackCount = Number(row.track_count ?? 0);
   const durationMs = Number(row.duration_ms ?? 0);
   return {
@@ -668,8 +711,12 @@ function toAlbumSummary(row: Row, rip: RipVerdict | null): AlbumSummary {
     maxBitDepth: nullableNumber(row.max_bit_depth),
     lossless: Number(row.all_lossless ?? 0) === 1,
     kind: trackCount >= RELEASE_MIN_TRACKS || durationMs >= RELEASE_MIN_MS ? 'release' : 'loose',
-    edition: typeof row.sample_path === 'string' ? editionFromPath(row.sample_path) : [],
+    edition:
+      typeof row.sample_path === 'string'
+        ? editionFromPath(row.sample_path, String(row.title))
+        : [],
     rip,
+    pressings,
   };
 }
 

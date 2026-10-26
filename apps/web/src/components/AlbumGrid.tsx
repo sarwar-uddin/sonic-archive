@@ -135,6 +135,9 @@ export function AlbumCard({
           {edition}
         </p>
       )}
+      {album.pressings > 1 && (
+        <p className={`mono ${styles.edition}`}>{album.pressings} pressings in the collection</p>
+      )}
     </article>
   );
 }
