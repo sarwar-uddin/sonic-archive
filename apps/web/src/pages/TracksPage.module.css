@@ -1,0 +1,124 @@
+.table {
+  display: block;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.thead {
+  display: block;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.table th,
+.table td {
+  display: block;
+  padding: 0;
+  font-weight: inherit;
+  text-align: left;
+}
+
+.row {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 3fr) minmax(0, 2fr) minmax(0, 2.4fr)
+    3.5em 9em 4em;
+  align-items: center;
+  gap: 16px;
+  height: 44px;
+  padding: 0 6px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.row > th,
+.row > td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thead .row {
+  background: var(--ink);
+  border-bottom-color: var(--rule-strong);
+}
+
+.thead button {
+  padding: 0;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.thead button:hover,
+.thead [aria-sort="ascending"] button,
+.thead [aria-sort="descending"] button {
+  color: var(--paper);
+}
+
+.body {
+  display: block;
+  position: relative;
+}
+
+.body .row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+}
+
+.body .row:hover {
+  background: var(--ink-raised);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 15.5px;
+}
+
+.artist,
+.album {
+  font-size: 13px;
+  color: var(--paper-dim);
+}
+
+.album a:hover {
+  color: var(--accent);
+}
+
+.year,
+.sampleRate,
+.duration {
+  color: var(--muted);
+}
+
+.table .duration,
+.table .alignEnd {
+  text-align: right;
+}
+
+.hiRes {
+  color: var(--accent);
+}
+
+.dim {
+  color: var(--muted);
+}
+
+@media (max-width: 860px) {
+  .row {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr) 4em;
+  }
+
+  .album,
+  .year,
+  .sampleRate {
+    display: none;
+  }
+}

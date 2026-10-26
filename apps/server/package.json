@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "typecheck": "tsc --noEmit -p ."
+    "typecheck": "tsc --noEmit -p .",
+    "dev": "node --watch src/main.ts"
   },
   "dependencies": {
     "@sonic-archive/catalog": "workspace:*",

@@ -1,0 +1,76 @@
+.artists {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 28px;
+}
+
+.artists li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.artists a {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 300;
+}
+
+.artists a:hover {
+  color: var(--accent);
+}
+
+.artists :global(.mono) {
+  color: var(--muted);
+}
+
+.tracks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tracks li {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto 4em;
+  gap: 16px;
+  align-items: baseline;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.tracks :global(.mono) {
+  color: var(--muted);
+  text-align: right;
+}
+
+.trackTitle {
+  font-family: var(--font-display);
+  font-size: 17px;
+}
+
+.trackTitle a:hover {
+  color: var(--accent);
+}
+
+.trackMeta {
+  font-size: 13px;
+  color: var(--paper-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .tracks li {
+    grid-template-columns: minmax(0, 1fr) 3.5em;
+  }
+
+  .trackMeta,
+  .tracks li > :global(.mono):nth-child(3) {
+    display: none;
+  }
+}

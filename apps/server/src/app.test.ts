@@ -429,6 +429,8 @@ describe('production web app', () => {
       const page = await request(webApp).get('/albums/3');
       expect(page.status).toBe(200);
       expect(page.text).toContain('<title>Sonic Archive</title>');
+      expect(page.headers['content-security-policy']).toContain("script-src 'self'");
+      expect(page.headers['content-security-policy']).toContain("frame-ancestors 'none'");
       expect((await request(webApp).get('/api/missing')).status).toBe(404);
     } finally {
       fs.rmSync(webDist, { recursive: true, force: true });

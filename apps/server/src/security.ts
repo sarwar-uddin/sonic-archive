@@ -47,3 +47,27 @@ export const apiContentSecurityPolicy: RequestHandler = (_req, res, next) => {
   res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
   next();
 };
+
+/**
+ * The web app loads only its own bundled scripts, styles, fonts and images.
+ * Inline style attributes are allowed (placeholder sleeve tints); inline
+ * scripts are not.
+ */
+export const webContentSecurityPolicy: RequestHandler = (_req, res, next) => {
+  res.setHeader(
+    'Content-Security-Policy',
+    [
+      "default-src 'self'",
+      "script-src 'self'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self'",
+      "font-src 'self'",
+      "connect-src 'self'",
+      "object-src 'none'",
+      "base-uri 'none'",
+      "form-action 'self'",
+      "frame-ancestors 'none'",
+    ].join('; '),
+  );
+  next();
+};

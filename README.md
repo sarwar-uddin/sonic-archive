@@ -17,7 +17,8 @@ pnpm check      # typecheck + lint + tests
 pnpm paths      # show where config, database and cache live
 pnpm db:migrate # create or upgrade the catalog database (backs up first)
 pnpm scan       # index the library: read-only, needs --confirm (see docs/safety.md)
-pnpm dev:server # API on http://127.0.0.1:4317 (SONIC_PORT to change)
+pnpm dev        # API on 127.0.0.1:4317 + web app on http://127.0.0.1:5173
+pnpm start      # production: build the web app and serve everything on http://127.0.0.1:4317
 ```
 
 ## Layout
@@ -27,6 +28,7 @@ pnpm dev:server # API on http://127.0.0.1:4317 (SONIC_PORT to change)
 | `packages/catalog`   | Domain core: config, scanner, database, read queries (no HTTP)         |
 | `packages/contracts` | API query schemas and response types, shared by server and web         |
 | `apps/server`        | CLI and the read-only Express API                                      |
+| `apps/web`           | React frontend (Vite)                                                  |
 | `docs/adr`           | Architecture decision records                                          |
 | `test-fixtures`      | Synthetic audio library for tests ([details](test-fixtures/README.md)) |
 
@@ -57,6 +59,8 @@ All endpoints are `GET`, return JSON, and address resources by numeric id.
 
 ## Status
 
-Milestones **M0–M3** (foundation, database, scanner, API) are complete, and
-two real album folders have been sample-scanned (M2.5). Next is M4, the web
-frontend.
+The MVP (milestones M0–M4) is complete: foundation, database, read-only
+scanner, API, and web frontend. Two real album folders have been
+sample-scanned (M2.5); the full-library scan is waiting for explicit
+approval. Later milestones: library health reports (M5), artwork thumbnails
+(M6), ratings and notes (M7), playlists (M8), and optional playback (M9).

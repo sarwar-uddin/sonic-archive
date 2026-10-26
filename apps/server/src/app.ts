@@ -18,6 +18,7 @@ import {
   LOOPBACK_HOSTNAMES,
   readOnlyMethods,
   securityHeaders,
+  webContentSecurityPolicy,
 } from './security.ts';
 
 export interface AppDeps {
@@ -124,6 +125,7 @@ export function createApp(deps: AppDeps): express.Express {
 
   if (deps.webDist) {
     const webDist = deps.webDist;
+    app.use(webContentSecurityPolicy);
     app.use(express.static(webDist, { index: false, dotfiles: 'deny', maxAge: '1h' }));
     // Client-side routes all render the app shell.
     app.get(/^\/(?!api\/).*/, (_req, res) => {

@@ -17,7 +17,10 @@
     "db:migrate": "node apps/server/src/cli.ts migrate",
     "scan": "node apps/server/src/cli.ts scan",
     "fixtures:generate": "./test-fixtures/generate.sh",
-    "dev:server": "node --watch apps/server/src/main.ts"
+    "dev:server": "node --watch apps/server/src/main.ts",
+    "dev": "pnpm --parallel --filter @sonic-archive/server --filter @sonic-archive/web dev",
+    "build": "pnpm --filter @sonic-archive/web build",
+    "start": "pnpm build && SONIC_WEB_DIST=apps/web/dist node apps/server/src/main.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.3",
