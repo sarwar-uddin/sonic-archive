@@ -6,8 +6,8 @@ interface CoverProps {
   readonly artworkId: number | null;
   readonly title: string;
   readonly artist: string | null;
-  /** Rendered width hint in CSS pixels, for the browser's image decoding. */
-  readonly size?: number;
+  /** `sm` for grids and lists, `lg` for the album page. */
+  readonly size?: 'sm' | 'lg';
   readonly eager?: boolean;
 }
 
@@ -16,7 +16,7 @@ interface CoverProps {
  * fails to load). The placeholder tint is derived from the title, so the same
  * album always gets the same sleeve.
  */
-export function Cover({ artworkId, title, artist, size = 240, eager = false }: CoverProps) {
+export function Cover({ artworkId, title, artist, size = 'sm', eager = false }: CoverProps) {
   const [failed, setFailed] = useState(false);
   const label = artist ? `${title} by ${artist}` : title;
 
@@ -24,10 +24,10 @@ export function Cover({ artworkId, title, artist, size = 240, eager = false }: C
     return (
       <img
         className={styles.cover}
-        src={artworkUrl(artworkId)}
+        src={artworkUrl(artworkId, size)}
         alt={`Cover of ${label}`}
-        width={size}
-        height={size}
+        width={size === 'sm' ? 400 : 1200}
+        height={size === 'sm' ? 400 : 1200}
         loading={eager ? 'eager' : 'lazy'}
         decoding="async"
         onError={() => setFailed(true)}

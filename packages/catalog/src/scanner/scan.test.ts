@@ -216,6 +216,22 @@ describe('first scan of the fixture library', () => {
     });
   });
 
+  it('fills in a cover added to the folder later, without re-reading audio', async () => {
+    await scan();
+    expect(one("SELECT artwork_id FROM albums WHERE title = 'Untagged'")).toEqual({
+      artwork_id: null,
+    });
+    fs.copyFileSync(
+      path.join(lib.root, 'Basalt Quartet/Hi-Res Session (2020)/cover.jpg'),
+      path.join(lib.root, 'Untagged/Folder.JPG'),
+    );
+    const summary = await scan();
+    expect(summary.counters).toMatchObject({ unchanged: FIXTURE_AUDIO_COUNT - 1, updated: 0 });
+    expect(one("SELECT artwork_id FROM albums WHERE title = 'Untagged'")).toEqual({
+      artwork_id: expect.any(Number),
+    });
+  });
+
   it('skips unreadable folder art without failing the file', async () => {
     if (RUNNING_AS_ROOT) return;
     fs.chmodSync(path.join(lib.root, 'Basalt Quartet/Hi-Res Session (2020)/cover.jpg'), 0o000);

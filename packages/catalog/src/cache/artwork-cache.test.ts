@@ -33,6 +33,16 @@ describe('storeArtwork', () => {
     expect(fs.readdirSync(path.join(cacheDir, ARTWORK_SUBDIR))).toEqual([a?.cacheFile]);
   });
 
+  it('accepts TIFF scans in both byte orders', () => {
+    const le = new Uint8Array([0x49, 0x49, 0x2a, 0x00, 8, 0, 0, 0]);
+    const be = new Uint8Array([0x4d, 0x4d, 0x00, 0x2a, 0, 0, 0, 8]);
+    expect(storeArtwork(cacheDir, { data: le }, 'folder')).toMatchObject({
+      mime: 'image/tiff',
+      source: 'folder',
+    });
+    expect(storeArtwork(cacheDir, { data: be })?.cacheFile).toMatch(/\.tif$/);
+  });
+
   it('trusts the bytes over the tag', () => {
     expect(storeArtwork(cacheDir, { mime: 'image/jpeg', data: PNG })?.mime).toBe('image/png');
   });

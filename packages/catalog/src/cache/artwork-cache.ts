@@ -7,12 +7,16 @@ import type { PictureRecord } from '../metadata/map.ts';
 export const ARTWORK_SUBDIR = 'artwork';
 
 /** Larger embedded images are almost certainly corrupt tags; skip them. */
-export const MAX_ARTWORK_BYTES = 20 * 1024 * 1024;
+export const MAX_ARTWORK_BYTES = 64 * 1024 * 1024; // uncompressed TIFF scans run large
 
 const SIGNATURES: readonly { mime: string; ext: string; matches: (b: Uint8Array) => boolean }[] = [
   { mime: 'image/jpeg', ext: 'jpg', matches: (b) => startsWith(b, [0xff, 0xd8, 0xff]) },
   { mime: 'image/png', ext: 'png', matches: (b) => startsWith(b, [0x89, 0x50, 0x4e, 0x47]) },
   { mime: 'image/gif', ext: 'gif', matches: (b) => startsWith(b, [0x47, 0x49, 0x46, 0x38]) },
+  // TIFF (both byte orders): CD scans are often kept as TIFF. Browsers cannot
+  // show it, so the server only ever serves converted WebP derivatives.
+  { mime: 'image/tiff', ext: 'tif', matches: (b) => startsWith(b, [0x49, 0x49, 0x2a, 0x00]) },
+  { mime: 'image/tiff', ext: 'tif', matches: (b) => startsWith(b, [0x4d, 0x4d, 0x00, 0x2a]) },
   {
     mime: 'image/webp',
     ext: 'webp',
@@ -27,7 +31,7 @@ const SIGNATURES: readonly { mime: string; ext: string; matches: (b: Uint8Array)
  * named by its SHA-256 so identical covers are stored once.
  *
  * The type is taken from the image bytes, not the tag's claim, and only
- * raster formats are accepted. These files will later be served to the
+ * raster formats are accepted (JPEG, PNG, GIF, WebP, TIFF). These files will later be served to the
  * browser, and a tag claiming `image/svg+xml` or `text/html` must never
  * become active content.
  */

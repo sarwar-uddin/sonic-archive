@@ -108,6 +108,23 @@ export function upsertAlbum(db: CatalogExecutor, input: AlbumUpsertInput): numbe
   return existing.id;
 }
 
+/** The album a file's track belongs to, with its current artwork. */
+export function getAlbumOfFile(
+  db: CatalogExecutor,
+  fileId: number,
+): { albumId: number; artworkId: number | null } | undefined {
+  return db
+    .select({ albumId: albums.id, artworkId: albums.artworkId })
+    .from(tracks)
+    .innerJoin(albums, eq(albums.id, tracks.albumId))
+    .where(eq(tracks.fileId, fileId))
+    .get();
+}
+
+export function setAlbumArtwork(db: CatalogExecutor, albumId: number, artworkId: number): void {
+  db.update(albums).set({ artworkId }).where(eq(albums.id, albumId)).run();
+}
+
 export interface Credit {
   readonly artistId: number;
   readonly role: (typeof CREDIT_ROLES)[number];

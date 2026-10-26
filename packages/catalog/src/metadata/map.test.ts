@@ -1,6 +1,6 @@
 import type { IAudioMetadata, ICommonTagsResult, IFormat } from 'music-metadata';
 import { describe, expect, it } from 'vitest';
-import { albumFolder, toCatalogRecord, VARIOUS_ARTISTS } from './map.ts';
+import { albumFolder, folderTitle, toCatalogRecord, VARIOUS_ARTISTS } from './map.ts';
 
 function meta(
   common: Partial<ICommonTagsResult> = {},
@@ -159,6 +159,23 @@ describe('toCatalogRecord: artwork', () => {
   });
 });
 
+describe('folderTitle', () => {
+  it.each([
+    [
+      'Pink Floyd/Studio/1973 The Dark Side Of The Moon/(CDP 7 46001 2) [1st UK]',
+      '1973 The Dark Side Of The Moon (CDP 7 46001 2) [1st UK]',
+    ],
+    [
+      'Black Sabbath/1970 Paranoid [1991 Japan TECP-23893]',
+      '1970 Paranoid [1991 Japan TECP-23893]',
+    ],
+    ['[Bootlegs]', '[Bootlegs]'],
+    ['', 'Unknown Album'],
+  ])('%s → %s', (dir, expected) => {
+    expect(folderTitle(dir)).toBe(expected);
+  });
+});
+
 describe('albumFolder', () => {
   it.each([
     ['A/B/01.flac', 'A/B'],
@@ -166,6 +183,11 @@ describe('albumFolder', () => {
     ['A/B/Disc 2/01.flac', 'A/B'],
     ['A/B/disk3/01.flac', 'A/B'],
     ['A/B/CD Extras/01.flac', 'A/B/CD Extras'],
+    ['A/B/Disc 1of2/01.flac', 'A/B'],
+    ['A/B/CD 1 (50DP361)/01.flac', 'A/B'],
+    ['A/B/CD2 - Bonus CD/01.flac', 'A/B'],
+    ['A/B/CD1 ]CD_X_X001J, JP]/01.flac', 'A/B'],
+    ['A/B/CDs I Love/01.flac', 'A/B/CDs I Love'],
     ['01.flac', ''],
   ])('%s -> %s', (relPath, expected) => {
     expect(albumFolder(relPath)).toBe(expected);

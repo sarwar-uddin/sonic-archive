@@ -3,7 +3,9 @@ import path from 'node:path';
 import { MAX_ARTWORK_BYTES, storeArtwork } from '../cache/artwork-cache.ts';
 import {
   type Credit,
+  getAlbumOfFile,
   type NewArtwork,
+  setAlbumArtwork,
   upsertAlbum,
   upsertArtist,
   upsertArtwork,
@@ -142,7 +144,13 @@ async function realScan(
     return { scanId, status, scopeSubpath, counters, swept, reason, problems, totalBytes };
   };
 
-  const context: ScanContext = { rootId, scanId, mode: options.mode, folderArt: new Map() };
+  const context: ScanContext = {
+    rootId,
+    scanId,
+    mode: options.mode,
+    folderArt: new Map(),
+    artChecked: new Set(),
+  };
   try {
     await forEachConcurrent(
       reader.walk(scopeSubpath ?? ''),
@@ -204,6 +212,8 @@ interface ScanContext {
   readonly mode: ScanOptions['mode'];
   /** Folder artwork per directory, looked up once per scan. */
   readonly folderArt: Map<string, Promise<NewArtwork | null>>;
+  /** Albums already checked for missing artwork during this scan. */
+  readonly artChecked: Set<number>;
 }
 
 async function processFile(
@@ -221,6 +231,8 @@ async function processFile(
   // Incremental fast path: same size and mtime means same file; don't read it.
   if (statUnchanged && ctx.mode === 'incremental' && existing.status !== 'missing') {
     markFileSeen(db, existing.id, ctx.scanId);
+    if (existing.status === 'present')
+      await fillMissingArtwork(deps, ctx, existing.id, entry.relPath);
     if (existing.status === 'error') {
       counters.errors++;
       report(entry.relPath, existing.errorMessage ?? 'Previously unreadable.');
@@ -283,6 +295,26 @@ async function processFile(
   });
 
   countChange(existing, statUnchanged, counters);
+}
+
+/**
+ * An unchanged file is not re-read, but its album may still lack a cover
+ * that has since been added to the folder (or that a newer version of the
+ * cover rules can now recognize). Checked once per album per scan.
+ */
+async function fillMissingArtwork(
+  deps: ScanDeps,
+  ctx: ScanContext,
+  fileId: number,
+  relPath: string,
+): Promise<void> {
+  const album = getAlbumOfFile(deps.db, fileId);
+  if (!album || album.artworkId !== null || ctx.artChecked.has(album.albumId)) return;
+  ctx.artChecked.add(album.albumId);
+  const art = await findFolderArt(deps, ctx, relPath);
+  if (art) {
+    deps.db.transaction((tx) => setAlbumArtwork(tx, album.albumId, upsertArtwork(tx, art)));
+  }
 }
 
 function findFolderArt(

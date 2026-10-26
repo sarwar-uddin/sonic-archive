@@ -30,6 +30,7 @@ import type {
   TrackListItem,
 } from '@sonic-archive/contracts';
 import type express from 'express';
+import sharp from 'sharp';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from './app.ts';
@@ -344,13 +345,60 @@ describe('GET /api/search', () => {
 });
 
 describe('GET /api/artwork/:id', () => {
-  it('serves cached artwork with immutable caching', async () => {
+  it('serves covers as WebP at two sizes with immutable caching', async () => {
     const album = (await api(`/api/albums/${await albumId('Northern Lines')}`)).body as AlbumDetail;
-    const res = await api(`/api/artwork/${album.artworkId}`);
-    expect(res.status).toBe(200);
-    expect(res.headers['content-type']).toBe('image/jpeg');
-    expect(res.headers['cache-control']).toBe('public, max-age=31536000, immutable');
-    expect(res.body[0]).toBe(0xff);
+    const large = await api(`/api/artwork/${album.artworkId}`).buffer(true);
+    expect(large.status).toBe(200);
+    expect(large.headers['content-type']).toBe('image/webp');
+    expect(large.headers['cache-control']).toBe('public, max-age=31536000, immutable');
+    const body = large.body as Buffer;
+    expect(body.subarray(0, 4).toString('latin1')).toBe('RIFF');
+    expect(body.subarray(8, 12).toString('latin1')).toBe('WEBP');
+    // The 64 px fixture is never enlarged.
+    expect((await sharp(body).metadata()).width).toBe(64);
+    const small = await api(`/api/artwork/${album.artworkId}?size=sm`);
+    expect(small.status).toBe(200);
+    expect(fs.existsSync(path.join(cacheDir, ARTWORK_SUBDIR, 'derived'))).toBe(true);
+  });
+
+  it('converts TIFF scans and shrinks large images', async () => {
+    const sha = 'a'.repeat(64);
+    await sharp({ create: { width: 1600, height: 1600, channels: 3, background: '#7a2b1d' } })
+      .tiff()
+      .toFile(path.join(cacheDir, ARTWORK_SUBDIR, `${sha}.tif`));
+    catalog.database.sqlite
+      .prepare(
+        `INSERT INTO artwork (sha256, mime, byte_size, source, cache_file)
+         VALUES ('${sha}', 'image/tiff', 1, 'folder', '${sha}.tif')`,
+      )
+      .run();
+    const id = (
+      catalog.database.sqlite.prepare('SELECT max(id) AS id FROM artwork').get() as { id: number }
+    ).id;
+    for (const [size, edge] of [
+      ['sm', 400],
+      ['lg', 1200],
+    ] as const) {
+      const res = await api(`/api/artwork/${id}?size=${size}`).buffer(true);
+      expect(res.headers['content-type']).toBe('image/webp');
+      expect((await sharp(res.body as Buffer).metadata()).width).toBe(edge);
+    }
+  });
+
+  it('rejects unknown sizes and 404s undecodable files', async () => {
+    expect((await api('/api/artwork/1?size=huge')).status).toBe(400);
+    const sha = 'b'.repeat(64);
+    fs.writeFileSync(path.join(cacheDir, ARTWORK_SUBDIR, `${sha}.jpg`), 'not an image');
+    catalog.database.sqlite
+      .prepare(
+        `INSERT INTO artwork (sha256, mime, byte_size, source, cache_file)
+         VALUES ('${sha}', 'image/jpeg', 1, 'folder', '${sha}.jpg')`,
+      )
+      .run();
+    const id = (
+      catalog.database.sqlite.prepare('SELECT max(id) AS id FROM artwork').get() as { id: number }
+    ).id;
+    expect((await api(`/api/artwork/${id}`)).status).toBe(404);
   });
 
   it('404s for unknown artwork', async () => {

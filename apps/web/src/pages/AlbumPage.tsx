@@ -40,7 +40,7 @@ export function AlbumView({ album }: { readonly album: AlbumDetail }) {
   return (
     <article className={styles.album}>
       <div className={styles.sleeve}>
-        <Cover artworkId={album.artworkId} title={album.title} artist={artist} size={560} eager />
+        <Cover artworkId={album.artworkId} title={album.title} artist={artist} size="lg" eager />
       </div>
       <div className={styles.notes}>
         <header className={styles.header}>

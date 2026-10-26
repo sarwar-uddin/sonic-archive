@@ -31,7 +31,11 @@ export interface CatalogRecord {
 /** Used when a compilation has no album-artist tag. */
 export const VARIOUS_ARTISTS = 'Various Artists';
 
-const DISC_FOLDER = /^(cd|disc|disk)\s*\d+$/i;
+/**
+ * Disc subfolders as rippers actually name them: "CD1", "Disc 2", "Disc 1of2",
+ * "CD 1 (50DP361)", "CD2 - Bonus CD", "CD1 ]CD_X_X001J, JP]".
+ */
+const DISC_FOLDER = /^(cd|disc|disk)[\s._-]*\d+/i;
 
 /**
  * Maps parsed tags to catalog records. Pure: no I/O, so every rule here is
@@ -86,7 +90,7 @@ export function toCatalogRecord(metadata: IAudioMetadata, relPath: string): Cata
     album: {
       groupKey,
       // Untagged files are grouped by folder so they remain browsable.
-      title: albumTitle ?? (path.basename(albumDir) || 'Unknown Album'),
+      title: albumTitle ?? folderTitle(albumDir),
       albumArtist,
       year,
       musicbrainzAlbumId: mbid,
@@ -105,6 +109,19 @@ export function albumFolder(relPath: string): string {
   const dir = path.dirname(relPath);
   const folder = DISC_FOLDER.test(path.basename(dir)) ? path.dirname(dir) : dir;
   return folder === '.' ? '' : folder;
+}
+
+/**
+ * A readable album title from a folder path. Folders named only by their
+ * pressing, like "(CDP 7 46034 2) [1st UK]" under "1973 The Dark Side Of The
+ * Moon", borrow the parent folder's name: "1973 The Dark Side Of The Moon
+ * (CDP 7 46034 2) [1st UK]".
+ */
+export function folderTitle(albumDir: string): string {
+  const base = path.basename(albumDir);
+  if (base === '') return 'Unknown Album';
+  const parent = path.basename(path.dirname(albumDir));
+  return /^\s*[([]/.test(base) && parent !== '' && parent !== '.' ? `${parent} ${base}` : base;
 }
 
 function clean(value: string | null | undefined): string | null {
