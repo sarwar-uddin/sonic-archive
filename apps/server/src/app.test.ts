@@ -665,6 +665,57 @@ describe('GET /api/files/:id/audio', () => {
   });
 });
 
+describe('GET /api/events', () => {
+  it('announces the last scan, then each newly finished one', async () => {
+    // Its own catalog: this test adds a scan.
+    const own = createTempCatalog();
+    const ownCache = path.join(own.dataDir, 'cache');
+    const scanOwn = () =>
+      runScan(
+        { db: own.database.db, reader: createLibraryReader(lib.root), cacheDir: ownCache },
+        { mode: 'incremental' },
+      );
+    await scanOwn();
+    const ownReader = openCatalogDatabase(own.dataDir, { readonly: true });
+    const events = createApp({
+      queries: createCatalogQueries(ownReader.sqlite),
+      healthReport: () => buildHealthReport(ownReader.sqlite),
+      artworkDir: path.join(ownCache, ARTWORK_SUBDIR),
+      libraryRoot: lib.root,
+      eventsPollMs: 30,
+    });
+    const server = events.listen(0, '127.0.0.1');
+    await new Promise((r) => server.once('listening', r));
+    const { port } = server.address() as { port: number };
+    const controller = new AbortController();
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/api/events`, { signal: controller.signal });
+      expect(res.headers.get('content-type')).toBe('text/event-stream');
+      const stream = res.body?.getReader();
+      if (!stream) throw new Error('no body');
+      const decoder = new TextDecoder();
+      let text = '';
+      const next = async (pattern: RegExp) => {
+        while (!pattern.test(text)) {
+          const { value, done } = await stream.read();
+          if (done) throw new Error('stream ended');
+          text += decoder.decode(value);
+        }
+      };
+      await next(/event: scan\ndata: \{"id":1,/);
+      // Another scan finishes (here: the CLI's, on the write connection).
+      await scanOwn();
+      await next(/data: \{"id":2,/);
+    } finally {
+      controller.abort();
+      server.closeAllConnections();
+      server.close();
+      ownReader.close();
+      own.cleanup();
+    }
+  });
+});
+
 describe('GET /api/statistics', () => {
   it('describes the releases: decades, genres, artists and rip verdicts', async () => {
     const body = (await api('/api/statistics')).body as Statistics;

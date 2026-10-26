@@ -3,6 +3,7 @@ import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { api } from '../lib/api.ts';
 import { formatBytes } from '../lib/format.ts';
+import { useLibraryEvents } from '../lib/use-library-events.ts';
 import { PlayerProvider, usePlayer } from '../lib/use-player.tsx';
 import { CommandPalette, isTyping } from './CommandPalette.tsx';
 import styles from './Layout.module.css';
@@ -26,6 +27,7 @@ export function Layout() {
 
 function Shell() {
   const [playerState, player] = usePlayer();
+  const notice = useLibraryEvents();
   const { data: stats } = useQuery({
     queryKey: ['stats'],
     queryFn: ({ signal }) => api.stats(signal),
@@ -98,6 +100,14 @@ function Shell() {
       </main>
       {palette && <CommandPalette onClose={() => setPalette(false)} />}
       <PlayerBar />
+      <p
+        className={styles.notice}
+        role="status"
+        aria-label="Library updates"
+        data-shown={notice ? '' : undefined}
+      >
+        {notice}
+      </p>
       <footer className={styles.footer}>
         <p className="kicker">Read-only archive · Nothing leaves this machine</p>
       </footer>

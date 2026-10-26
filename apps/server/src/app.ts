@@ -39,6 +39,8 @@ export interface AppDeps {
   readonly library?: Pick<LibraryReader, 'audioFile' | 'readAudioRange'> | null;
   /** Converts formats browsers cannot play; without it they are not playable. */
   readonly transcoder?: Transcoder;
+  /** How often the events stream checks for a finished scan. */
+  readonly eventsPollMs?: number;
   /** Built web app to serve at `/` (production); omitted in development. */
   readonly webDist?: string;
   readonly allowedHostnames?: ReadonlySet<string>;
@@ -139,6 +141,34 @@ export function createApp(deps: AppDeps): express.Express {
     stream.on('error', (error) => (res.headersSent ? res.destroy(error) : next(error)));
     res.on('close', () => stream.destroy());
     stream.pipe(res);
+  });
+
+  // Server-sent events: tells open pages when a scan has finished, so they
+  // can refresh. It only reads the scan history; any scan (CLI or the
+  // `start:watch` watcher) is noticed.
+  api.get('/events', (req, res) => {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-store',
+      Connection: 'keep-alive',
+    });
+    let last: string | null = null;
+    let quietTicks = 0;
+    const check = () => {
+      const scan = queries.lastScan();
+      const key = scan && scan.status !== 'running' ? `${scan.id}:${scan.finishedAt}` : null;
+      if (scan && key !== null && key !== last) {
+        res.write(`event: scan\ndata: ${JSON.stringify(scan)}\n\n`);
+        last = key;
+        quietTicks = 0;
+      } else if (++quietTicks * (deps.eventsPollMs ?? 2000) >= 25_000) {
+        res.write(': keep-alive\n\n');
+        quietTicks = 0;
+      }
+    };
+    check();
+    const timer = setInterval(check, deps.eventsPollMs ?? 2000);
+    req.on('close', () => clearInterval(timer));
   });
 
   api.get('/statistics', (_req, res) => {

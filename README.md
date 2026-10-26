@@ -60,7 +60,7 @@ All endpoints are `GET`, return JSON, and address resources by numeric id.
 
 ## Status
 
-Milestones **M0–M13** are complete, plus a collection-led redesign: the
+Milestones **M0–M14** are complete, plus a collection-led redesign: the
 library has been scanned in full (read-only; verified unchanged afterwards).
 Covers come from folder scans (JPEG/PNG/TIFF) and are served as WebP
 thumbnails. Single-file CD images are split into their tracks by their CUE
@@ -86,4 +86,7 @@ Albums play in the browser: files as stored, CD images gapless as one
 stream, other formats (ALAC, APE, DSD…) converted to FLAC while playing
 ([ADR 0009](docs/adr/0009-playback.md)).
 
-Next: dynamic library updates, dynamic range per pressing, a spine shelf view.
+`pnpm start:watch` keeps the catalog in step with the library: changes are
+picked up within seconds, and open pages refresh themselves.
+
+Next: dynamic range per pressing, a spine shelf view.

@@ -10,7 +10,9 @@ import {
   openCatalogDatabase,
 } from '@sonic-archive/catalog';
 import { createApp } from './app.ts';
+import { renderScanCopy } from './artwork.ts';
 import { createTranscoder } from './audio.ts';
+import { startLiveLibrary } from './live.ts';
 
 /** Never configurable: the server only ever listens on loopback (docs/safety.md, #6). */
 const HOST = '127.0.0.1';
@@ -44,6 +46,22 @@ const app = createApp({
   ...(webDist !== undefined && { webDist: path.resolve(webDist) }),
 });
 
+// `--watch` (pnpm start:watch): follow changes in the library as they happen.
+const watch = process.argv.includes('--watch');
+let live: ReturnType<typeof startLiveLibrary> | null = null;
+let liveDb: ReturnType<typeof openCatalogDatabase> | null = null;
+if (watch && library.status === 'configured') {
+  liveDb = openCatalogDatabase(dirs.dataDir);
+  live = startLiveLibrary({
+    db: liveDb.db,
+    reader: createLibraryReader(library.root),
+    cacheDir: dirs.cacheDir,
+    renderScan: renderScanCopy,
+  });
+} else if (watch) {
+  console.log('--watch ignored: no library is configured.');
+}
+
 const server = app.listen(port, HOST, () => {
   console.log(`Sonic Archive API on http://${HOST}:${port}`);
   if (library.status === 'unconfigured')
@@ -51,7 +69,11 @@ const server = app.listen(port, HOST, () => {
 });
 
 const shutdown = () => {
+  live?.close();
+  // Open event streams would keep the server from closing.
+  server.closeAllConnections();
   server.close(() => {
+    liveDb?.close();
     database.close();
     process.exit(0);
   });

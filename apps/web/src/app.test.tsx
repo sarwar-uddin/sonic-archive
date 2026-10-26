@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { groupByInitial } from './pages/ArtistsPage.tsx';
@@ -311,6 +311,43 @@ describe('search', () => {
       '/artists/1',
     );
     expect(screen.getByRole('region', { name: /Albums/ })).toHaveTextContent('Hi-Res Session');
+  });
+});
+
+describe('live library', () => {
+  it('refreshes and says so when a scan finishes with changes', async () => {
+    const sources: FakeEventSource[] = [];
+    class FakeEventSource extends EventTarget {
+      readonly url: string;
+      constructor(url: string) {
+        super();
+        this.url = url;
+        sources.push(this);
+      }
+      close() {}
+      emit(scan: object) {
+        this.dispatchEvent(new MessageEvent('scan', { data: JSON.stringify(scan) }));
+      }
+    }
+    vi.stubGlobal('EventSource', FakeEventSource);
+    const fetchMock = mockApi({ stats, albums: page([albumSummary]), facets });
+    renderApp('/');
+    await screen.findByRole('heading', { level: 1 });
+    const source = sources[0];
+    if (!source) throw new Error('no event source');
+    expect(source.url).toBe('/api/events');
+
+    const scan = { id: 4, added: 0, updated: 0, restored: 0, missing: 0 };
+    act(() => source.emit(scan)); // the scan the page loaded after: nothing to say
+    expect(screen.getByRole('status', { name: 'Library updates' })).toHaveTextContent('');
+    const statsCalls = () =>
+      fetchMock.mock.calls.filter(([u]) => String(u).includes('/api/stats')).length;
+    const before = statsCalls();
+    act(() => source.emit({ ...scan, id: 5, added: 2, updated: 1 }));
+    expect(screen.getByRole('status', { name: 'Library updates' })).toHaveTextContent(
+      'Library updated: 2 added, 1 updated',
+    );
+    await waitFor(() => expect(statsCalls()).toBeGreaterThan(before));
   });
 });
 

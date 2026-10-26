@@ -56,4 +56,5 @@ export {
   type ScanProblem,
   type ScanSummary,
 } from './scanner/scan.ts';
+export { createDebouncedRunner, type LibraryWatcher, watchLibrary } from './scanner/watch.ts';
 export { nameKey } from './text/normalize.ts';

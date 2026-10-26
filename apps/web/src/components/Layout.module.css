@@ -190,3 +190,30 @@
     padding-bottom: 96px;
   }
 }
+
+/* "Library updated": a slip that drops in at the top right, then leaves. */
+.notice {
+  position: fixed;
+  z-index: 30;
+  top: 16px;
+  right: 16px;
+  max-width: min(360px, calc(100vw - 32px));
+  padding: 10px 14px;
+  background: var(--paper);
+  color: var(--black);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 12px 30px -10px rgb(0 0 0 / 0.8);
+  translate: 0 -150%;
+  transition: translate 200ms ease;
+}
+
+.notice[data-shown] {
+  translate: 0 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notice {
+    transition: none;
+  }
+}
