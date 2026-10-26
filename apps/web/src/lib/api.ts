@@ -58,8 +58,11 @@ async function get<T>(path: string, params?: Params, signal?: AbortSignal): Prom
   return (await response.json()) as T;
 }
 
-/** `sm` (400 px) for grids and lists, `lg` (1200 px) for the album page. */
-export function artworkUrl(id: number, size: 'sm' | 'lg' = 'sm'): string {
+/**
+ * `sm` (400 px) for grids and lists, `lg` (1200 px) for the album page,
+ * `xl` (2000 px) for reading booklet scans.
+ */
+export function artworkUrl(id: number, size: 'sm' | 'lg' | 'xl' = 'sm'): string {
   return `/api/artwork/${id}?size=${size}`;
 }
 

@@ -181,6 +181,15 @@
   color: var(--paper);
 }
 
+.scans {
+  max-width: var(--measure);
+  margin: 40px auto 0;
+}
+
+.scans > h2 {
+  margin-bottom: 16px;
+}
+
 .body {
   max-width: var(--measure);
   margin: 48px auto 0;

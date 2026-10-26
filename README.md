@@ -60,13 +60,15 @@ All endpoints are `GET`, return JSON, and address resources by numeric id.
 
 ## Status
 
-Milestones **M0–M7** are complete, plus a collection-led redesign: the
+Milestones **M0–M8** are complete, plus a collection-led redesign: the
 library has been scanned in full (read-only; verified unchanged afterwards).
 Covers come from folder scans (JPEG/PNG/TIFF) and are served as WebP
 thumbnails. Single-file CD images are split into their tracks by their CUE
 sheets, and the discs of a set join into one album
 ([ADR 0007](docs/adr/0007-cd-images-and-album-identity.md)).
 
-Next: a viewer for the scanned artwork (booklets, back covers, discs), rip
-verification from EAC/XLD logs, grouping pressings of one album, a search
+Each album page shows the scanned sleeve, booklet, discs and OBI from its
+folder, with a full-screen viewer for reading liner notes.
+
+Next: rip verification from EAC/XLD logs, grouping pressings of one album, a search
 palette, and a statistics page.

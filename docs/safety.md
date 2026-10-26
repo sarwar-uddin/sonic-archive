@@ -27,6 +27,13 @@ SHA-256. The image type is detected from the bytes; only JPEG, PNG, GIF and
 WebP are kept, so a tag or a file can never smuggle SVG or HTML into what the
 app will later serve.
 
+Scanned artwork (booklet pages, back covers, discs; M8) is read the same way
+and never copied whole: the scanner (CLI process) decodes each image and
+writes a WebP viewing copy of at most 2000 px to the cache. The server still
+reads only the cache, never the library. A scan folder is searched only if it
+holds no audio of its own (or is a disc folder), so one album never picks up
+another album's images.
+
 ## Configuring the library (do this only at milestone M2.5)
 
 ```jsonc

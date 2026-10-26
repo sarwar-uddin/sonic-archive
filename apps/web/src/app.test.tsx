@@ -68,6 +68,60 @@ describe('album page', () => {
     ).toBeInTheDocument();
   });
 
+  it('opens scanned artwork in a viewer and pages with the arrow keys', async () => {
+    const scan = (artworkId: number, kind: string, number: number | null, label: string) => ({
+      artworkId,
+      kind,
+      number,
+      label,
+      width: 1000,
+      height: 1000,
+    });
+    mockApi({
+      'albums/7': {
+        ...albumDetail,
+        scans: [
+          scan(11, 'front', null, 'front'),
+          scan(12, 'booklet', 1, 'Booklet 01'),
+          scan(13, 'booklet', 2, 'Booklet 02'),
+          scan(14, 'disc', null, 'CD'),
+        ],
+      },
+      stats,
+    });
+    renderApp('/albums/7');
+    const shelf = within(await screen.findByRole('region', { name: 'Sleeve & booklet' }));
+    expect(shelf.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([
+      'Front',
+      'Booklet 2',
+      'Disc',
+    ]);
+
+    await userEvent.click(shelf.getByRole('button', { name: 'View Booklet · page 1 of 2' }));
+    const viewer = within(screen.getByRole('dialog', { name: 'Hi-Res Session: scanned artwork' }));
+    expect(viewer.getByRole('img', { name: 'Booklet · page 1 of 2' })).toHaveAttribute(
+      'src',
+      '/api/artwork/12?size=xl',
+    );
+    expect(viewer.getByText('2 / 4')).toBeInTheDocument();
+
+    await userEvent.keyboard('{ArrowRight}');
+    expect(viewer.getByRole('img', { name: 'Booklet · page 2 of 2' })).toBeInTheDocument();
+    await userEvent.keyboard('{ArrowRight}{ArrowRight}');
+    expect(viewer.getByRole('img', { name: 'Disc' })).toBeInTheDocument();
+    expect(viewer.getByRole('button', { name: 'Next scan' })).toBeDisabled();
+
+    await userEvent.click(viewer.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('leaves out the scan section when the folder has none', async () => {
+    mockApi({ 'albums/7': albumDetail, stats });
+    renderApp('/albums/7');
+    await screen.findByRole('heading', { level: 1 });
+    expect(screen.queryByRole('region', { name: 'Sleeve & booklet' })).not.toBeInTheDocument();
+  });
+
   it('shows not-found for an unknown album', async () => {
     mockApi({ stats });
     renderApp('/albums/999');

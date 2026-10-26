@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router';
 import { editionText } from '../components/AlbumGrid.tsx';
 import { Cover } from '../components/Cover.tsx';
+import { ScanShelf } from '../components/ScanViewer.tsx';
 import { ErrorMessage, Loading } from '../components/States.tsx';
 import { TrackList } from '../components/TrackList.tsx';
 import { api, artworkUrl } from '../lib/api.ts';
@@ -113,6 +114,15 @@ export function AlbumView({ album }: { readonly album: AlbumDetail }) {
           </div>
         </div>
       </header>
+
+      {album.scans.length > 0 && (
+        <section className={styles.scans} aria-labelledby="scans-heading">
+          <h2 id="scans-heading" className={styles.sectionTitle}>
+            Sleeve &amp; booklet
+          </h2>
+          <ScanShelf scans={album.scans} title={album.title} />
+        </section>
+      )}
 
       <div className={styles.body}>
         <section aria-labelledby="tracklist-heading">
