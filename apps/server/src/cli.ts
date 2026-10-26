@@ -13,6 +13,7 @@ import {
   runScan,
   type ScanSummary,
 } from '@sonic-archive/catalog';
+import { analyzeLibrary } from './analyze.ts';
 import { renderScanCopy } from './artwork.ts';
 
 const USAGE = `Usage: sonic-archive <command> [options]
@@ -21,13 +22,20 @@ Commands:
   paths     Show where Sonic Archive stores its config, database, and cache
   migrate   Create or upgrade the catalog database (backs up first)
   scan      Index the configured music library (read-only)
+  analyze   Measure dynamic range by decoding audio (read-only; needs ffmpeg)
 
 Scan options:
   --confirm              Required to actually read the library
   --subpath <folder>     Only scan this folder (relative to the library root)
   --full                 Re-read every file, not just new or changed ones
   --dry-run              List and compare files without reading their contents
-  --allow-mass-missing   Permit marking many files missing in one scan`;
+  --allow-mass-missing   Permit marking many files missing in one scan
+
+Analyze options:
+  --confirm              Required to actually read the library
+  --subpath <folder>     Only analyze this folder (relative to the library root)
+
+Analysis only measures tracks that are new or whose files changed.`;
 
 const EXIT = { ok: 0, usage: 1, config: 2, aborted: 3, failed: 4 } as const;
 
@@ -43,6 +51,9 @@ try {
       break;
     case 'scan':
       process.exitCode = await scan(rest);
+      break;
+    case 'analyze':
+      process.exitCode = await analyze(rest);
       break;
     default:
       console.error(USAGE);
@@ -152,6 +163,64 @@ async function scan(args: string[]): Promise<number> {
       : summary.status === 'aborted'
         ? EXIT.aborted
         : EXIT.failed;
+  } finally {
+    process.off('SIGINT', onSigint);
+    database.close();
+  }
+}
+
+async function analyze(args: string[]): Promise<number> {
+  const { values } = parseArgs({
+    args,
+    strict: true,
+    options: {
+      confirm: { type: 'boolean', default: false },
+      subpath: { type: 'string' },
+    },
+  });
+  const { dirs, library } = loadConfig({ env: process.env, homeDir: os.homedir() });
+  if (library.status === 'unconfigured') {
+    console.error('No music library is configured (see docs/safety.md).');
+    return EXIT.config;
+  }
+  const plan = `library  ${library.root}\nscope    ${values.subpath ?? '(entire library)'}\nmeasure  dynamic range of new or changed tracks (decodes audio; read-only)`;
+  if (!values.confirm) {
+    console.log(`${plan}\n\nNothing has been read. Re-run with --confirm to proceed.`);
+    return EXIT.usage;
+  }
+  console.log(plan);
+  const database = openCatalogDatabase(dirs.dataDir);
+  const controller = new AbortController();
+  const onSigint = () => {
+    console.error('\nStopping after the files in progress…');
+    controller.abort();
+  };
+  process.once('SIGINT', onSigint);
+  try {
+    migrateCatalog(database);
+    const started = Date.now();
+    const summary = await analyzeLibrary({
+      db: database.db,
+      reader: createLibraryReader(library.root),
+      subpath: values.subpath?.replace(/\/+$/, '') ?? null,
+      signal: controller.signal,
+      onProgress: (done, total) => {
+        if (process.stderr.isTTY) process.stderr.write(`\r\x1b[K  ${done}/${total} files…`);
+      },
+    });
+    if (process.stderr.isTTY) process.stderr.write('\r\x1b[K');
+    console.log(
+      `\nanalyzed   ${summary.files} files, ${summary.tracks} tracks in ${Math.round((Date.now() - started) / 1000)} s`,
+    );
+    if (summary.failed.length > 0) {
+      console.log(`failed     ${summary.failed.length}`);
+      for (const f of summary.failed.slice(0, 20)) console.log(`  ${f.relPath}: ${f.message}`);
+    }
+    return controller.signal.aborted
+      ? EXIT.aborted
+      : summary.failed.length > 0
+        ? EXIT.failed
+        : EXIT.ok;
   } finally {
     process.off('SIGINT', onSigint);
     database.close();

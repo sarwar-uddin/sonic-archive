@@ -18,6 +18,8 @@ export function track(overrides: Partial<TrackSummary> & { id: number }): TrackS
     bitrate: 2_400_000,
     hasEmbeddedArt: false,
     span: null,
+    dr: null,
+    peakDb: null,
     file: {
       id: 100 + (overrides.id ?? 0),
       playback: 'direct',
@@ -46,6 +48,7 @@ export const albumSummary: AlbumSummary = {
   edition: ['1st Japan', 'SICP-1234'],
   rip: null,
   pressings: 1,
+  dr: null,
 };
 
 export const albumDetail: AlbumDetail = {

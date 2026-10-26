@@ -447,6 +447,10 @@ describe('ledger charts', () => {
         origins: [{ country: 'Japan', releases: 4 }],
         genres: [{ id: 5, name: 'Rock', releases: 6 }],
         artists: [{ id: 2, name: 'Pink Floyd', releases: 5 }],
+        dynamicsByDecade: [
+          { decade: 1970, dr: 13.5, releases: 3 },
+          { decade: 1980, dr: 9.25, releases: 7 },
+        ],
         rips: [
           { verdict: 'verified', releases: 6 },
           { verdict: 'none', releases: 4 },
@@ -458,7 +462,10 @@ describe('ledger charts', () => {
     expect(decades.getByRole('img', { name: '1980s: 7 releases' })).toBeInTheDocument();
     expect(screen.getByText('1 without a year are left out', { exact: false })).toBeInTheDocument();
     // The table view lists every value.
-    expect(screen.getByText('Show as a table')).toBeInTheDocument();
+    expect(screen.getAllByText('Show as a table')).toHaveLength(2);
+
+    const dynamics = within(screen.getByRole('list', { name: 'Mean dynamic range by decade' }));
+    expect(dynamics.getByRole('img', { name: '1980s: DR 9.3' })).toBeInTheDocument();
 
     const origins = within(screen.getByRole('list', { name: 'Releases by country of pressing' }));
     expect(origins.getByText('Japan')).toBeInTheDocument();

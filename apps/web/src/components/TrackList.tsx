@@ -136,6 +136,15 @@ function TrackRow({
               </dd>
             </>
           )}
+          {track.dr !== null && (
+            <>
+              <dt>Dynamic range</dt>
+              <dd>
+                DR{track.dr}
+                {track.peakDb !== null && ` · peak ${track.peakDb.toFixed(1)} dBFS`}
+              </dd>
+            </>
+          )}
           <dt>{track.span ? 'Image size' : 'File size'}</dt>
           <dd>{formatBytes(track.file.size)}</dd>
           {track.artists.length > 0 && (

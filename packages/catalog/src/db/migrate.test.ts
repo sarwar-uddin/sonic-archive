@@ -63,7 +63,7 @@ describe('openCatalogDatabase (read-only)', () => {
 describe('migrateCatalog', () => {
   it('creates the schema on a fresh database without a pointless backup', () => {
     const result = migrateCatalog(database);
-    expect(result).toEqual({ applied: 5, backupFile: null });
+    expect(result).toEqual({ applied: 6, backupFile: null });
     expect(tableNames(database.sqlite)).toEqual([
       'album_images',
       'albums',
@@ -75,6 +75,7 @@ describe('migrateCatalog', () => {
       'rip_logs',
       'scans',
       'track_artists',
+      'track_dynamics',
       'track_genres',
       'track_search', // FTS5 virtual table (0001) and its shadow tables:
       'track_search_config',

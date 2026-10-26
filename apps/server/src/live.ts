@@ -17,6 +17,7 @@ import {
   type ScanSummary,
   watchLibrary,
 } from '@sonic-archive/catalog';
+import { analyzeLibrary } from './analyze.ts';
 
 export interface LiveLibraryDeps {
   readonly db: CatalogDb;
@@ -26,6 +27,8 @@ export interface LiveLibraryDeps {
   readonly log?: (line: string) => void;
   /** How long changes must be quiet before a scan starts. */
   readonly quietMs?: number;
+  /** Measure dynamic range of new tracks after each scan (needs ffmpeg). */
+  readonly analyze?: boolean;
 }
 
 export function startLiveLibrary(deps: LiveLibraryDeps) {
@@ -41,6 +44,12 @@ export function startLiveLibrary(deps: LiveLibraryDeps) {
       { mode: 'incremental' },
     );
     log(describe(summary));
+    if (deps.analyze && summary.status === 'completed') {
+      const analysis = await analyzeLibrary({ db: deps.db, reader: deps.reader, concurrency: 2 });
+      if (analysis.files > 0 || analysis.failed.length > 0) {
+        log(`dynamic range: ${analysis.tracks} tracks measured, ${analysis.failed.length} failed`);
+      }
+    }
   };
   const runner = createDebouncedRunner(scan, deps.quietMs ?? 4000);
   const watcher = watchLibrary(

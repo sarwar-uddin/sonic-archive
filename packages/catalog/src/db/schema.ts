@@ -14,6 +14,7 @@ import {
   index,
   integer,
   primaryKey,
+  real,
   sqliteTable,
   text,
   uniqueIndex,
@@ -280,3 +281,20 @@ export const ripLogs = sqliteTable(
   },
   (t) => [uniqueIndex('rip_logs_album_path_unique').on(t.albumId, t.relPath)],
 );
+
+/**
+ * Dynamic range per track (M15), measured by decoding the audio
+ * (`pnpm analyze`). Derived and rebuildable; a track whose file changed
+ * (size or mtime) is measured again.
+ */
+export const trackDynamics = sqliteTable('track_dynamics', {
+  trackId: integer('track_id')
+    .primaryKey()
+    .references(() => tracks.id, { onDelete: 'cascade' }),
+  /** Unrounded DR value; null for silence. */
+  drExact: real('dr_exact'),
+  /** Highest sample in dBFS; null for silence. */
+  peakDb: real('peak_db'),
+  sourceSize: integer('source_size').notNull(),
+  sourceMtimeMs: integer('source_mtime_ms').notNull(),
+});

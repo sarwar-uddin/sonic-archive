@@ -16,6 +16,7 @@
     "paths": "node apps/server/src/cli.ts paths",
     "db:migrate": "node apps/server/src/cli.ts migrate",
     "scan": "node apps/server/src/cli.ts scan",
+    "analyze": "node apps/server/src/cli.ts analyze",
     "fixtures:generate": "./test-fixtures/generate.sh",
     "dev:server": "node --watch apps/server/src/main.ts",
     "dev": "pnpm --parallel --filter @sonic-archive/server --filter @sonic-archive/web dev",

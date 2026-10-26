@@ -202,6 +202,29 @@ function Charts({ data }: { data: Statistics }) {
         />
       </section>
 
+      {data.dynamicsByDecade.length > 0 && (
+        <section className={page.section} aria-labelledby="dynamics">
+          <h2 id="dynamics" className={page.sectionTitle}>
+            Dynamic range by decade
+          </h2>
+          <p className={styles.note}>
+            Mean DR of your releases from each decade, by album year, where measured (
+            <code>pnpm analyze</code>). Higher is more dynamic; under 8 is heavily compressed.
+          </p>
+          <ColumnChart
+            label="Mean dynamic range by decade"
+            unit={['DR', 'DR']}
+            format={(dr) => `DR ${dr.toFixed(1)}`}
+            showShare={false}
+            columns={data.dynamicsByDecade.map((d) => ({
+              key: String(d.decade),
+              label: `${d.decade}s`,
+              value: d.dr,
+            }))}
+          />
+        </section>
+      )}
+
       <div className={styles.chartGrid}>
         <section className={page.section} aria-labelledby="origins">
           <h2 id="origins" className={page.sectionTitle}>

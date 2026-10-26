@@ -57,6 +57,7 @@ if (watch && library.status === 'configured') {
     reader: createLibraryReader(library.root),
     cacheDir: dirs.cacheDir,
     renderScan: renderScanCopy,
+    analyze: true,
   });
 } else if (watch) {
   console.log('--watch ignored: no library is configured.');

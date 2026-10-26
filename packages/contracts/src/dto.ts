@@ -36,6 +36,8 @@ export interface AlbumSummary {
   readonly rip: RipVerdict | null;
   /** How many pressings of this album the collection holds, this one included. */
   readonly pressings: number;
+  /** Dynamic range (DR meter), the rounded mean of measured tracks; null until analyzed. */
+  readonly dr: number | null;
 }
 
 /**
@@ -102,6 +104,9 @@ export interface TrackSummary {
    * CD image by its CUE sheet; null when the track is the whole file.
    */
   readonly span: { readonly startMs: number; readonly endMs: number | null } | null;
+  /** Dynamic range and highest sample (dBFS); null until analyzed, or silent. */
+  readonly dr: number | null;
+  readonly peakDb: number | null;
   readonly file: {
     /** For streaming: `/api/files/:id/audio`. */
     readonly id: number;
@@ -321,6 +326,12 @@ export interface Statistics {
   readonly artists: readonly {
     readonly id: number;
     readonly name: string;
+    readonly releases: number;
+  }[];
+  /** Mean dynamic range of the measured releases of each decade (album year). */
+  readonly dynamicsByDecade: readonly {
+    readonly decade: number;
+    readonly dr: number;
     readonly releases: number;
   }[];
   /** Releases per rip verdict; `none` means no rip log. */

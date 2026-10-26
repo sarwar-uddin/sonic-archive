@@ -141,6 +141,11 @@ export function AlbumView({ album }: { readonly album: AlbumDetail }) {
               <span>{plural(album.trackCount, 'track')}</span>
               <span>{formatLongDuration(album.durationMs)}</span>
               <span>{formatBytes(album.totalBytes)}</span>
+              {album.dr !== null && (
+                <span className="tag" title="Dynamic range (DR meter)">
+                  DR{album.dr}
+                </span>
+              )}
             </p>
             {album.genres.length > 0 && (
               <ul className={styles.genres} aria-label="Genres">
@@ -204,6 +209,13 @@ export function AlbumView({ album }: { readonly album: AlbumDetail }) {
             {fromImage && <Spec label="Rip">Single-file CD image, split by CUE sheet</Spec>}
             <Spec label="Running time">{formatLongDuration(album.durationMs)}</Spec>
             <Spec label="Size">{formatBytes(album.totalBytes)}</Spec>
+            {album.dr !== null && (
+              <Spec label="Dynamic range">
+                <abbr title="Measured with the DR meter: higher is more dynamic, under 8 is heavily compressed">
+                  DR{album.dr}
+                </abbr>
+              </Spec>
+            )}
             {album.edition.length > 0 && <Spec label="Pressing">{album.edition.join(' · ')}</Spec>}
             {album.musicbrainzAlbumId && (
               <Spec label="MusicBrainz">

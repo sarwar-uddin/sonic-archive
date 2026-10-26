@@ -1,3 +1,7 @@
+export {
+  type DynamicRange,
+  DynamicRangeMeter,
+} from './analysis/dynamic-range.ts';
 export { ARTWORK_SUBDIR, storeArtwork } from './cache/artwork-cache.ts';
 export { ConfigError, type ConfigErrorCode } from './config/errors.ts';
 export {
@@ -20,6 +24,12 @@ export {
   type OpenOptions,
   openCatalogDatabase,
 } from './db/database.ts';
+export {
+  type AnalysisJob,
+  type DynamicsResult,
+  findAnalysisJobs,
+  saveDynamics,
+} from './db/dynamics-repository.ts';
 export * from './db/library-repository.ts';
 export {
   MIGRATIONS_DIR,

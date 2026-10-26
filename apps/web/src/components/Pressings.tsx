@@ -23,6 +23,9 @@ export function Pressings({ album }: { readonly album: AlbumDetail }) {
           <th scope="col">Format</th>
           <th scope="col">Tracks</th>
           <th scope="col">Length</th>
+          <th scope="col">
+            <abbr title="Dynamic range (DR meter)">DR</abbr>
+          </th>
           <th scope="col">Rip</th>
         </tr>
       </thead>
@@ -64,6 +67,7 @@ function PressingRow({ album, current }: { album: AlbumSummary; current: boolean
       </td>
       <td className="mono">{plural(album.trackCount, 'track')}</td>
       <td className="mono">{formatLongDuration(album.durationMs)}</td>
+      <td className="mono">{album.dr === null ? '—' : `DR${album.dr}`}</td>
       <td>{album.rip ? <RipStamp verdict={album.rip} /> : <span className="mono">—</span>}</td>
     </tr>
   );

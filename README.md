@@ -60,7 +60,7 @@ All endpoints are `GET`, return JSON, and address resources by numeric id.
 
 ## Status
 
-Milestones **M0–M14** are complete, plus a collection-led redesign: the
+Milestones **M0–M15** are complete, plus a collection-led redesign: the
 library has been scanned in full (read-only; verified unchanged afterwards).
 Covers come from folder scans (JPEG/PNG/TIFF) and are served as WebP
 thumbnails. Single-file CD images are split into their tracks by their CUE
@@ -89,4 +89,8 @@ stream, other formats (ALAC, APE, DSD…) converted to FLAC while playing
 `pnpm start:watch` keeps the catalog in step with the library: changes are
 picked up within seconds, and open pages refresh themselves.
 
-Next: dynamic range per pressing, a spine shelf view.
+`pnpm analyze --confirm` measures each track's dynamic range (the DR meter
+used by the Dynamic Range Database), shown per album, per pressing and per
+decade on the Ledger; `start:watch` measures new tracks after each scan.
+
+Next: choosing the music folder inside the app, then a spine shelf view.

@@ -34,6 +34,7 @@ import type express from 'express';
 import sharp from 'sharp';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { analyzeLibrary } from './analyze.ts';
 import { createApp } from './app.ts';
 import { renderScanCopy } from './artwork.ts';
 import { createTranscoder } from './audio.ts';
@@ -57,6 +58,7 @@ beforeAll(async () => {
     },
     { mode: 'incremental' },
   );
+  await analyzeLibrary({ db: catalog.database.db, reader: createLibraryReader(lib.root) });
   // Serve from a read-only connection, exactly as main.ts does.
   reader = openCatalogDatabase(catalog.dataDir, { readonly: true });
   app = createApp({
@@ -208,6 +210,7 @@ describe('GET /api/albums', () => {
         edition: [], // "(2020)" is a year, not an edition
         rip: null, // no rip log
         pressings: 1,
+        dr: 0, // steady sine tones
       },
     ]);
   });
@@ -730,6 +733,7 @@ describe('GET /api/statistics', () => {
         { id: expect.any(Number), name: 'Cinder Collective', releases: 1 },
         { id: expect.any(Number), name: 'Ember', releases: 1 },
       ],
+      dynamicsByDecade: [{ decade: 2010, dr: expect.any(Number), releases: 2 }],
       rips: [
         { verdict: 'differs', releases: 1 },
         { verdict: 'none', releases: 1 },

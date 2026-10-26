@@ -36,6 +36,13 @@
       "when": 1793033215679,
       "tag": "0004_rip_logs",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1793038426808,
+      "tag": "0005_track_dynamics",
+      "breakpoints": true
     }
   ]
 }

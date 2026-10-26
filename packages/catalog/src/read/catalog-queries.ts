@@ -61,8 +61,10 @@ const ALBUM_STATS_CTE = `
            max(t.bit_depth) AS max_bit_depth,
            min(coalesce(t.lossless, 0)) AS all_lossless,
            coalesce(sum(CASE WHEN ${FIRST_OF_FILE} THEN f.size END), 0) AS total_bytes,
-           min(f.rel_path) AS sample_path
+           min(f.rel_path) AS sample_path,
+           avg(d.dr_exact) AS dr_exact
     FROM tracks t JOIN files f ON f.id = t.file_id
+    LEFT JOIN track_dynamics d ON d.track_id = t.id
     WHERE f.status != 'missing' AND t.album_id IS NOT NULL
     GROUP BY t.album_id
   )`;
@@ -70,7 +72,7 @@ const ALBUM_STATS_CTE = `
 const ALBUM_COLUMNS = `
   a.id, a.title, a.year, a.artwork_id, a.album_artist_id, ar.name AS artist_name,
   s.track_count, s.duration_ms, s.codecs, s.max_sample_rate, s.max_bit_depth,
-  s.all_lossless, s.total_bytes, s.sample_path`;
+  s.all_lossless, s.total_bytes, s.sample_path, s.dr_exact`;
 
 /** See ALBUM_KINDS in contracts: what counts as a whole release. */
 export const RELEASE_MIN_TRACKS = 3;
@@ -89,7 +91,8 @@ const TRACK_COLUMNS = `
   t.id, t.title, t.display_artist, t.track_no, t.disc_no, t.year, t.duration_ms, t.codec,
   t.container, t.lossless, t.sample_rate, t.bit_depth, t.channels, t.bitrate,
   t.has_embedded_art, t.start_ms, t.end_ms, t.segment, f.id AS file_id, f.rel_path, f.size, f.status,
-  f.audio_md5`;
+  f.audio_md5, (SELECT dr_exact FROM track_dynamics WHERE track_id = t.id) AS dr_exact,
+  (SELECT peak_db FROM track_dynamics WHERE track_id = t.id) AS peak_db`;
 
 const TRACK_SORT_SQL: Record<TrackListQuery['sort'], (dir: string) => string> = {
   artist: (d) =>
@@ -639,7 +642,7 @@ export function createCatalogQueries(sqlite: Database.Database): CatalogQueries 
   function statistics(): Statistics {
     const releases = all(
       `WITH ${ALBUM_STATS_CTE}
-       SELECT a.id, a.title, a.year, s.sample_path FROM albums a
+       SELECT a.id, a.title, a.year, s.sample_path, s.dr_exact FROM albums a
        JOIN album_stats s ON s.album_id = a.id WHERE ${IS_RELEASE_SQL}`,
     );
     const count = <K>(keys: K[]) => {
@@ -680,6 +683,21 @@ export function createCatalogQueries(sqlite: Database.Database): CatalogQueries 
          GROUP BY ar.id ORDER BY n DESC, sort_key(ar.name) LIMIT 10`,
         [ids],
       ).map((r) => ({ id: Number(r.id), name: String(r.name), releases: Number(r.n) })),
+      dynamicsByDecade: (() => {
+        const byDecade = new Map<number, number[]>();
+        for (const r of releases) {
+          if (r.year === null || r.dr_exact === null) continue;
+          const decade = Math.floor(Number(r.year) / 10) * 10;
+          byDecade.set(decade, [...(byDecade.get(decade) ?? []), Number(r.dr_exact)]);
+        }
+        return [...byDecade]
+          .sort(([a], [b]) => a - b)
+          .map(([decade, values]) => ({
+            decade,
+            dr: Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10,
+            releases: values.length,
+          }));
+      })(),
       rips: (['verified', 'clean', 'differs', 'problems', 'unknown', 'none'] as const)
         .map((verdict) => ({ verdict, releases: rips.get(verdict) ?? 0 }))
         .filter((r) => r.releases > 0),
@@ -786,6 +804,10 @@ function toAlbumSummary(row: Row, rip: RipVerdict | null, pressings: number): Al
         : [],
     rip,
     pressings,
+    dr:
+      row.dr_exact === null || row.dr_exact === undefined
+        ? null
+        : Math.round(Number(row.dr_exact)) || 0,
   };
 }
 
@@ -808,6 +830,11 @@ function toTrackSummary(row: Row, credits: Map<number, ArtistRef[]>): TrackSumma
     channels: nullableNumber(row.channels),
     bitrate: nullableNumber(row.bitrate),
     hasEmbeddedArt: Number(row.has_embedded_art) === 1,
+    dr:
+      row.dr_exact === null || row.dr_exact === undefined
+        ? null
+        : Math.round(Number(row.dr_exact)) || 0,
+    peakDb: nullableNumber(row.peak_db),
     span:
       Number(row.segment ?? 0) === 0
         ? null

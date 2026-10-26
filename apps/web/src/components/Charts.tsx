@@ -97,16 +97,22 @@ export function ColumnChart({
   columns,
   unit,
   label,
+  format = (value) => `${value} ${value === 1 ? unit[0] : unit[1]}`,
+  showShare = true,
 }: {
   readonly columns: readonly Column[];
   readonly unit: [singular: string, plural: string];
   readonly label: string;
+  /** How a value reads in the tooltip and table; defaults to "3 releases". */
+  readonly format?: (value: number) => string;
+  /** Shares only make sense for counts, not for averages. */
+  readonly showShare?: boolean;
 }) {
   const ticks = niceTicks(Math.max(0, ...columns.map((c) => c.value)));
   const top = ticks.at(-1) || 1;
   const peak = Math.max(...columns.map((c) => c.value));
   const total = columns.reduce((sum, c) => sum + c.value, 0);
-  const text = (c: Column) => `${c.value} ${c.value === 1 ? unit[0] : unit[1]}`;
+  const text = (c: Column) => format(c.value);
   return (
     <figure className={styles.columnFigure}>
       <div className={styles.plot}>
@@ -145,7 +151,8 @@ export function ColumnChart({
                   role="presentation"
                   style={{ bottom: `calc(${(c.value / top) * 100}% + 24px)` }}
                 >
-                  <strong>{text(c)}</strong> {c.label} · {share(c.value, total)}
+                  <strong>{text(c)}</strong> {c.label}
+                  {showShare && ` · ${share(c.value, total)}`}
                 </span>
               </span>
               <span className={`mono ${styles.columnLabel}`} aria-hidden="true">
@@ -162,8 +169,8 @@ export function ColumnChart({
             {columns.map((c) => (
               <tr key={c.key}>
                 <th scope="row">{c.label}</th>
-                <td className="mono">{c.value}</td>
-                <td className="mono">{share(c.value, total)}</td>
+                <td className="mono">{text(c)}</td>
+                {showShare && <td className="mono">{share(c.value, total)}</td>}
               </tr>
             ))}
           </tbody>
