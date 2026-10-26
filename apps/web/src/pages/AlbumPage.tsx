@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router';
 import { editionText } from '../components/AlbumGrid.tsx';
 import { Cover } from '../components/Cover.tsx';
+import { RipLogs } from '../components/RipLogs.tsx';
 import { ScanShelf } from '../components/ScanViewer.tsx';
 import { ErrorMessage, Loading } from '../components/States.tsx';
 import { TrackList } from '../components/TrackList.tsx';
@@ -157,6 +158,14 @@ export function AlbumView({ album }: { readonly album: AlbumDetail }) {
               </Spec>
             )}
           </dl>
+          {album.rip !== null && album.ripLogs.length > 0 && (
+            <section aria-labelledby="rip-heading">
+              <h3 id="rip-heading" className="visually-hidden">
+                Rip log
+              </h3>
+              <RipLogs logs={album.ripLogs} verdict={album.rip} />
+            </section>
+          )}
         </aside>
       </div>
     </article>

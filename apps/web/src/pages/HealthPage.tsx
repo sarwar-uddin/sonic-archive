@@ -2,6 +2,7 @@ import type { HealthTrackRef, ReportSection } from '@sonic-archive/contracts';
 import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
+import { RipStamp } from '../components/RipLogs.tsx';
 import { ErrorMessage, Loading } from '../components/States.tsx';
 import { api } from '../lib/api.ts';
 import { formatDuration } from '../lib/format.ts';
@@ -29,6 +30,7 @@ export function HealthPage() {
     ['Exact duplicates', r.exactDuplicates.total, 'exact'],
     ['Probable duplicates', r.probableDuplicates.total, 'probable'],
     ['Split albums', r.splitAlbums.total, 'split'],
+    ['Rip checks', r.ripChecks.total, 'rips'],
   ] as const;
 
   return (
@@ -160,6 +162,26 @@ export function HealthPage() {
                 <li key={folder}>
                   <Path>{folder}</Path>
                 </li>
+              ))}
+            </ul>
+          </li>
+        )}
+      </Section>
+
+      <Section
+        id="rips"
+        title="Rip checks"
+        data={r.ripChecks}
+        empty="Every rip log is clean or verified."
+        note="From the EAC, XLD and CUETools logs next to your rips. “Differs” usually means AccurateRip only knows another pressing with the same track layout; “problems” means the ripper reported read errors."
+      >
+        {(c) => (
+          <li key={c.album.id}>
+            <AlbumLink album={c.album} />
+            <RipStamp verdict={c.verdict} />
+            <ul className={styles.issues}>
+              {c.notes.map((note) => (
+                <li key={note}>{note}</li>
               ))}
             </ul>
           </li>

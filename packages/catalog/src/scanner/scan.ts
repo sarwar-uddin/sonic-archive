@@ -7,11 +7,14 @@ import {
   getAlbumImages,
   getAlbumOfFile,
   getArtworkCacheFile,
+  getRipLogSources,
   type NewArtwork,
   pruneEmptyAlbums,
+  type RipLogRow,
   removeOtherSegments,
   setAlbumArtwork,
   setAlbumImages,
+  setRipLogs,
   upsertAlbum,
   upsertArtist,
   upsertArtwork,
@@ -44,6 +47,7 @@ import {
   type NamedCueSheet,
   withCueSheet,
 } from '../metadata/cue.ts';
+import { IMAGE_EXTENSIONS } from '../metadata/folder-art.ts';
 import {
   albumFolder,
   type CatalogRecord,
@@ -51,6 +55,7 @@ import {
   splitByCue,
   toCatalogRecord,
 } from '../metadata/map.ts';
+import { decodeLogBytes, parseRipLog } from '../metadata/rip-log.ts';
 import { isScanFolder, MAX_SCAN_DEPTH, MAX_SCANS_PER_ALBUM } from '../metadata/scans.ts';
 
 /** A viewing copy of a scanned image, made by the caller's image library. */
@@ -104,13 +109,20 @@ export interface ScanProblem {
   readonly message: string;
 }
 
-/** What happened to scanned artwork images (not audio files). */
+/** What happened to scanned artwork images and rip logs (not audio files). */
 export interface ImageCounters {
   /** New or changed images given a viewing copy. */
   readonly rendered: number;
   readonly unchanged: number;
   readonly failed: number;
+  /** Rip logs (EAC, XLD, CUETools) recorded for the albums seen. */
+  readonly ripLogs: number;
 }
+
+const LOG_EXTENSIONS: ReadonlySet<string> = new Set(['.log', '.accurip']);
+/** Rip logs are a few to a few hundred KB; larger .log files are something else. */
+const MAX_LOG_BYTES = 2 * 1024 * 1024;
+const MAX_LOGS_PER_ALBUM = 20;
 
 export interface ScanSummary {
   readonly scanId: number | null;
@@ -163,7 +175,7 @@ async function realScan(
   });
 
   const counters: Mutable<ScanCounters> = zeroCounters();
-  let images: ImageCounters = { rendered: 0, unchanged: 0, failed: 0 };
+  let images: ImageCounters = { rendered: 0, unchanged: 0, failed: 0, ripLogs: 0 };
   const problems: ScanProblem[] = [];
   let totalBytes = 0;
   let walkComplete = true;
@@ -428,9 +440,8 @@ async function collectAlbumScans(
   report: (relPath: string, message: string) => void,
   options: ScanOptions,
 ): Promise<ImageCounters> {
-  const counters = { rendered: 0, unchanged: 0, failed: 0 };
+  const counters = { rendered: 0, unchanged: 0, failed: 0, ripLogs: 0 };
   const render = deps.renderScan;
-  if (!render) return counters;
   const { db, reader, cacheDir } = deps;
 
   const foldersByAlbum = new Map<number, string[]>();
@@ -454,13 +465,23 @@ async function collectAlbumScans(
     2,
     options.signal,
     async ([albumId, folders]) => {
+      // Await first: `+= await` would read the counter before another
+      // album's lane updates it, and lose that update.
+      const logCount = await collectRipLogs(deps, albumId, folders, descend, report);
+      counters.ripLogs += logCount;
+      if (!render) return;
       const known = new Map(getAlbumImages(db, albumId).map((r) => [r.relPath, r]));
       const rows: AlbumImageRow[] = [];
       for (const folder of folders) {
         const limit = MAX_SCANS_PER_ALBUM - rows.length;
         if (limit <= 0) break;
         const found = await reader
-          .listImages(folder, { maxDepth: MAX_SCAN_DEPTH, limit, descend })
+          .listFiles(folder, {
+            extensions: IMAGE_EXTENSIONS,
+            maxDepth: MAX_SCAN_DEPTH,
+            limit,
+            descend,
+          })
           .catch(() => []);
         for (const image of found) {
           const previous = known.get(image.relPath);
@@ -502,6 +523,58 @@ async function collectAlbumScans(
     },
   );
   return counters;
+}
+
+/**
+ * Records an album's rip logs: re-reads new or changed ones, keeps unchanged
+ * ones, drops vanished ones. Only files that parse as rip logs are kept, so
+ * other `.log` files (AUDIOCHECKER reports, tool output) are ignored.
+ * Returns how many logs the album has.
+ */
+async function collectRipLogs(
+  deps: ScanDeps,
+  albumId: number,
+  folders: readonly string[],
+  descend: (relSubdir: string, name: string, siblings: readonly string[]) => boolean,
+  report: (relPath: string, message: string) => void,
+): Promise<number> {
+  const { db, reader } = deps;
+  const known = new Map(getRipLogSources(db, albumId).map((r) => [r.relPath, r]));
+  const changed: RipLogRow[] = [];
+  const keep: string[] = [];
+  for (const folder of folders) {
+    const found = await reader
+      .listFiles(folder, {
+        extensions: LOG_EXTENSIONS,
+        maxDepth: MAX_SCAN_DEPTH,
+        limit: MAX_LOGS_PER_ALBUM,
+        descend,
+      })
+      .catch(() => []);
+    for (const file of found) {
+      const previous = known.get(file.relPath);
+      if (previous?.sourceSize === file.size && previous.sourceMtimeMs === file.mtimeMs) {
+        keep.push(file.relPath);
+        continue;
+      }
+      try {
+        const bytes = await reader.readSmallFile(file.relPath, MAX_LOG_BYTES);
+        if (bytes === null) continue;
+        const text = decodeLogBytes(bytes);
+        if (parseRipLog(text).tool === 'other') continue;
+        changed.push({
+          relPath: file.relPath,
+          sourceSize: file.size,
+          sourceMtimeMs: file.mtimeMs,
+          text,
+        });
+      } catch (error) {
+        report(file.relPath, `Rip log skipped: ${(error as Error).message}`);
+      }
+    }
+  }
+  setRipLogs(db, albumId, changed, keep);
+  return changed.length + keep.length;
 }
 
 async function* toAsync<T>(items: Iterable<T>): AsyncGenerator<T> {
@@ -597,7 +670,7 @@ async function dryRun(
     status: 'dry-run',
     scopeSubpath,
     counters,
-    images: { rendered: 0, unchanged: 0, failed: 0 },
+    images: { rendered: 0, unchanged: 0, failed: 0, ripLogs: 0 },
     swept: false,
     reason: null,
     problems,

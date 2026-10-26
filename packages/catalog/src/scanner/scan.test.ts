@@ -101,8 +101,9 @@ describe('first scan of the fixture library', () => {
       false,
     );
     expect(reader.stats.skippedHidden).toBeGreaterThanOrEqual(3);
-    // notes.txt, four images (cover/folder/back.jpg, Artwork/Front.png), two CUE sheets
-    expect(reader.stats.skippedNonAudio).toBe(7);
+    // notes.txt, four images (cover/folder/back.jpg, Artwork/Front.png), two CUE
+    // sheets, two rip logs and an AUDIOCHECKER report
+    expect(reader.stats.skippedNonAudio).toBe(10);
   });
 
   it('groups tracks into albums', async () => {
@@ -514,14 +515,19 @@ describe('scanned artwork', () => {
       'Drift/Double Album (1999)/CD2/cd2.jpg',
       'Drift/Double Album (1999)/folder.jpg',
     ]);
-    expect(summary.images).toEqual({ rendered: 5, unchanged: 0, failed: 0 });
+    expect(summary.images).toEqual({ rendered: 5, unchanged: 0, failed: 0, ripLogs: 2 });
   });
 
   it('keeps unchanged copies, and follows changed and removed images', async () => {
     await scanWithArt();
     expect(renders).toHaveLength(4);
     renders = [];
-    expect((await scanWithArt()).images).toEqual({ rendered: 0, unchanged: 4, failed: 0 });
+    expect((await scanWithArt()).images).toEqual({
+      rendered: 0,
+      unchanged: 4,
+      failed: 0,
+      ripLogs: 2,
+    });
     expect(renders).toHaveLength(0);
 
     const album = path.join(lib.root, 'Cinder Collective/Format Sampler (2015)');
@@ -587,10 +593,46 @@ describe('scanned artwork', () => {
     });
   });
 
-  it('collects nothing without a renderer', async () => {
+  it('collects no images without a renderer', async () => {
     const summary = await scan();
-    expect(summary.images).toEqual({ rendered: 0, unchanged: 0, failed: 0 });
+    expect(summary.images).toMatchObject({ rendered: 0, unchanged: 0, failed: 0 });
     expect(one('SELECT count(*) AS n FROM album_images')).toEqual({ n: 0 });
+  });
+});
+
+describe('rip logs', () => {
+  const logs = () =>
+    query<{ rel_path: string; starts: string }>(
+      `SELECT l.rel_path, substr(l.text, 1, 17) AS starts FROM rip_logs l
+       JOIN albums a ON a.id = l.album_id WHERE a.title = 'Live Image' ORDER BY l.rel_path`,
+    );
+
+  it('records EAC and CUETools logs as text, ignoring other .log files', async () => {
+    const summary = await scan();
+    expect(summary.images.ripLogs).toBe(2);
+    expect(logs()).toEqual([
+      // Decoded from UTF-16.
+      {
+        rel_path: 'Ember/Live Image (2010)/CD1/Ember - Live Image.log',
+        starts: 'Exact Audio Copy ',
+      },
+      {
+        rel_path: 'Ember/Live Image (2010)/CD2/Ember - Live Image 2.accurip',
+        starts: '[CUETools log; Da',
+      },
+    ]);
+  });
+
+  it('keeps unchanged logs and drops removed ones', async () => {
+    await scan();
+    const before = query('SELECT id, rel_path FROM rip_logs ORDER BY id');
+    await scan();
+    expect(query('SELECT id, rel_path FROM rip_logs ORDER BY id')).toEqual(before);
+    fs.rmSync(path.join(lib.root, 'Ember/Live Image (2010)/CD2/Ember - Live Image 2.accurip'));
+    await scan();
+    expect(logs().map((l) => l.rel_path)).toEqual([
+      'Ember/Live Image (2010)/CD1/Ember - Live Image.log',
+    ]);
   });
 });
 

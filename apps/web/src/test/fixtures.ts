@@ -42,11 +42,13 @@ export const albumSummary: AlbumSummary = {
   lossless: true,
   kind: 'release',
   edition: ['1st Japan', 'SICP-1234'],
+  rip: null,
 };
 
 export const albumDetail: AlbumDetail = {
   ...albumSummary,
   scans: [],
+  ripLogs: [],
   musicbrainzAlbumId: null,
   totalDiscs: 2,
   genres: [{ id: 3, name: 'Chamber' }],

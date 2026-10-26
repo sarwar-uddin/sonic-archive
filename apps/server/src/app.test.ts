@@ -202,6 +202,7 @@ describe('GET /api/albums', () => {
         lossless: true,
         kind: 'loose', // 2 short tracks; see ALBUM_KINDS
         edition: [], // "(2020)" is a year, not an edition
+        rip: null, // no rip log
       },
     ]);
   });
@@ -315,6 +316,31 @@ describe('GET /api/albums/:id', () => {
     const res = await api(`/api/artwork/${body.scans[1]?.artworkId}?size=xl`);
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toBe('image/webp');
+  });
+
+  it('summarizes rip logs and serves their text', async () => {
+    const body = (await api(`/api/albums/${await albumId('Live Image')}`)).body as AlbumDetail;
+    // Disc 1 is verified, disc 2 differs: the weaker disc decides.
+    expect(body.rip).toBe('differs');
+    expect(body.ripLogs).toEqual([
+      expect.objectContaining({
+        label: 'Ember - Live Image.log',
+        disc: 'CD1',
+        tool: 'EAC',
+        readOffset: 6,
+        accurateRip: { accurate: 3, inaccurate: 0, notInDatabase: 0, minConfidence: 9 },
+        verdict: 'verified',
+      }),
+      expect.objectContaining({
+        label: 'Ember - Live Image 2.accurip',
+        disc: 'CD2',
+        verdict: 'differs',
+      }),
+    ]);
+    const log = await api(`/api/rip-logs/${body.ripLogs[0]?.id}`);
+    expect(log.body).toMatchObject({ label: 'Ember - Live Image.log', albumId: body.id });
+    expect(log.body.text).toMatch(/^Exact Audio Copy V1\.8/);
+    expect((await api('/api/rip-logs/999999')).status).toBe(404);
   });
 
   it('404s for an unknown album', async () => {
@@ -539,6 +565,13 @@ describe('GET /api/health-report', () => {
     ]);
     expect(body.probableDuplicates.total).toBe(0);
     expect(body.splitAlbums.total).toBe(0);
+    expect(body.ripChecks.items).toEqual([
+      {
+        album: { id: expect.any(Number), title: 'Live Image', artist: 'Ember' },
+        verdict: 'differs',
+        notes: ['Ember - Live Image 2.accurip: 2 of 2 tracks differ from AccurateRip'],
+      },
+    ]);
   });
 });
 

@@ -115,6 +115,47 @@ describe('album page', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  it('summarizes the rip logs and opens one in full', async () => {
+    const log = {
+      id: 31,
+      label: 'Hi-Res Session.log',
+      disc: null,
+      tool: 'EAC',
+      toolVersion: 'V1.8',
+      drive: 'TEST DRIVE',
+      readMode: 'Secure',
+      secureMode: true,
+      readOffset: 6,
+      crcChecks: 1,
+      crcMismatches: 0,
+      readProblems: 0,
+      accurateRip: { accurate: 3, inaccurate: 0, notInDatabase: 0, minConfidence: 12 },
+      ctdb: null,
+      hasChecksum: true,
+      verdict: 'verified',
+    };
+    mockApi({
+      'albums/7': { ...albumDetail, rip: 'verified', ripLogs: [log] },
+      'rip-logs/31': {
+        id: 31,
+        albumId: 7,
+        label: log.label,
+        text: 'Exact Audio Copy V1.8\nAll tracks accurately ripped',
+      },
+      stats,
+    });
+    renderApp('/albums/7');
+    const sheet = within(await screen.findByRole('complementary', { name: 'Specification' }));
+    expect(sheet.getAllByText('Verified')).toHaveLength(2); // album and log
+    expect(sheet.getByText('AccurateRip 3/3 accurate (confidence ≥ 12)')).toBeInTheDocument();
+    expect(sheet.getByText('Test & copy CRCs match')).toBeInTheDocument();
+    expect(sheet.getByText('Offset +6')).toBeInTheDocument();
+
+    await userEvent.click(sheet.getByRole('button', { name: 'Read log' }));
+    const dialog = within(screen.getByRole('dialog', { name: 'Hi-Res Session.log' }));
+    expect(await dialog.findByText(/All tracks accurately ripped/)).toBeInTheDocument();
+  });
+
   it('leaves out the scan section when the folder has none', async () => {
     mockApi({ 'albums/7': albumDetail, stats });
     renderApp('/albums/7');
@@ -144,6 +185,14 @@ describe('library page', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Basalt Quartet' })).toBeInTheDocument();
     // Pressing details from the folder name appear on the card.
     expect(screen.getByText('1st Japan · SICP-1234')).toBeInTheDocument();
+  });
+
+  it('marks albums whose rip is verified', async () => {
+    mockApi({ albums: page([{ ...albumSummary, rip: 'verified' }]), facets, stats });
+    renderApp('/');
+    expect(await screen.findByTitle('Rip verified by AccurateRip or CTDB')).toHaveTextContent(
+      'AR ✓',
+    );
   });
 
   it('turns filter choices into URL state and API parameters', async () => {
@@ -264,6 +313,16 @@ describe('health page', () => {
         },
         probableDuplicates: empty,
         splitAlbums: empty,
+        ripChecks: {
+          total: 1,
+          items: [
+            {
+              album: { id: 4, title: 'OK Computer', artist: 'Radiohead' },
+              verdict: 'differs',
+              notes: ['OK Computer.log: 12 of 12 tracks differ from AccurateRip'],
+            },
+          ],
+        },
       },
     });
     renderApp('/health');
@@ -283,5 +342,10 @@ describe('health page', () => {
     );
     expect(screen.getByText('Every catalogued file is where it was.')).toBeInTheDocument();
     expect(screen.getByText('Invalid FLAC preamble')).toBeInTheDocument();
+
+    const rips = within(screen.getByRole('region', { name: /Rip checks/ }));
+    expect(rips.getByRole('link', { name: 'OK Computer' })).toHaveAttribute('href', '/albums/4');
+    expect(rips.getByText('Differs from AccurateRip')).toBeInTheDocument();
+    expect(rips.getByText(/12 of 12 tracks differ/)).toBeInTheDocument();
   });
 });

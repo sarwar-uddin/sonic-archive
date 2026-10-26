@@ -145,6 +145,34 @@ printf '%s\r\n' 'REM DATE 2010' 'PERFORMER "Ember"' 'TITLE "Live Image.TEST-102.
   '  TRACK 02 AUDIO' '    TITLE "Daybreak"' '    INDEX 01 00:01:00' \
   >"$album/CD2/Ember - Live Image 2.cue"
 
+# Rip logs, as EAC (UTF-16 with BOM) and CUETools write them. Disc 1 matches
+# AccurateRip; disc 2's checksums differ (another pressing). Alternate-offset
+# matches after "Offsetted by" must not count. AUDIOCHECKER output is not a
+# rip log and must be ignored.
+{
+  printf '\xff\xfe'
+  printf '%s\r\n' 'Exact Audio Copy V1.8 from 15. July 2024' '' \
+    'EAC extraction logfile from 4. May 2025, 18:21' '' 'Ember / Live Image (CD 1)' '' \
+    'Used drive  : TEST DRIVE   Adapter: 1  ID: 0' '' 'Read mode               : Secure' \
+    'Read offset correction                      : 6' '' 'Range status and errors' '' \
+    '     Test CRC 06E6CCC8' '     Copy CRC 06E6CCC8' '     Copy OK' '' 'No errors occurred' '' \
+    'AccurateRip summary' '' \
+    'Track  1  accurately ripped (confidence 12)  [401DC439]  (AR v2)' \
+    'Track  2  accurately ripped (confidence 9)  [669A874E]  (AR v2)' \
+    'Track  3  accurately ripped (confidence 12)  [663AD2EE]  (AR v2)' '' \
+    'All tracks accurately ripped' '' 'End of status report' '' \
+    '==== Log checksum 6887976A3EDBFB0540F56A5A9BEC5AFED4CBD1F36EAAACD7070DD697FF40649C ====' |
+    iconv -f UTF-8 -t UTF-16LE
+} >"$album/CD1/Ember - Live Image.log"
+printf '%s\r\n' '[CUETools log; Date: 26.08.2019 12:10:38; Version: 2.1.6]' \
+  '[AccurateRip ID: 0001f2a3-000b4c5d-0e0f1a2b] found.' 'Track   [  CRC   |   V2   ] Status' \
+  ' 01     [64ecdb9f|22ba4f84] (000/12) No match' ' 02     [e6b2dadf|2e88fe21] (000/12) No match' \
+  'Offsetted by 48:' ' 01     [8ccafa41] (010/12) Accurately ripped' \
+  ' 02     [48a087dd] (010/12) Accurately ripped' \
+  >"$album/CD2/Ember - Live Image 2.accurip"
+printf '%s\r\n' 'AUDIOCHECKER v2.0 beta (build 457) - by Dester - official page: dester.ru' \
+  'CDDA 100%' >"$album/CD1/audiochecker.log"
+
 # --- Problem files ----------------------------------------------------------
 # No tags at all.
 flac_track 831 0.5 44100 16 "$out/Untagged/unknown.flac"

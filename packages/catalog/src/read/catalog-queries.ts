@@ -21,6 +21,9 @@ import type {
   Disc,
   Facets,
   Page,
+  RipLogSummary,
+  RipLogText,
+  RipVerdict,
   ScanRecord,
   SearchResults,
   Stats,
@@ -31,6 +34,7 @@ import type {
 import type Database from 'better-sqlite3';
 import { toFtsQuery } from '../db/search-index.ts';
 import { editionFromPath } from '../metadata/edition.ts';
+import { albumRipVerdict, logDisc, parseRipLog } from '../metadata/rip-log.ts';
 import { classifyScan, compareScans } from '../metadata/scans.ts';
 import { nameKey } from '../text/normalize.ts';
 
@@ -106,6 +110,9 @@ export interface CatalogQueries {
   getScan(id: number): ScanRecord | null;
   lastScan(): ScanRecord | null;
   getArtwork(id: number): { cacheFile: string; mime: string } | null;
+  getRipLog(id: number): RipLogText | null;
+  /** Rip verdict per album that has logs. */
+  ripVerdicts(): ReadonlyMap<number, RipVerdict>;
 }
 
 export function createCatalogQueries(sqlite: Database.Database): CatalogQueries {
@@ -127,6 +134,35 @@ export function createCatalogQueries(sqlite: Database.Database): CatalogQueries 
     prepare(text).all(...params) as Row[];
   const get = (text: string, params: readonly Param[] = []) =>
     prepare(text).get(...params) as Row | undefined;
+
+  // Album rip verdicts come from parsing every stored log (about a
+  // millisecond each). They are cached until the logs change, which the
+  // scanner (another process) may do at any time.
+  let ripCache: { signature: string; verdicts: Map<number, RipVerdict> } | null = null;
+  const ripVerdicts = (): Map<number, RipVerdict> => {
+    const sig = get(`SELECT count(*) AS n, coalesce(max(id), 0) AS m,
+      coalesce(sum(source_size + source_mtime_ms), 0) AS s FROM rip_logs`);
+    const signature = `${sig?.n}:${sig?.m}:${sig?.s}`;
+    if (ripCache?.signature !== signature) {
+      const byAlbum = new Map<number, { relPath: string; verdict: RipVerdict }[]>();
+      for (const row of all('SELECT album_id, rel_path, text FROM rip_logs')) {
+        const list = byAlbum.get(Number(row.album_id)) ?? [];
+        list.push({
+          relPath: String(row.rel_path),
+          verdict: parseRipLog(String(row.text)).verdict,
+        });
+        byAlbum.set(Number(row.album_id), list);
+      }
+      const verdicts = new Map<number, RipVerdict>();
+      for (const [albumId, logs] of byAlbum) {
+        const verdict = albumRipVerdict(logs);
+        if (verdict !== null) verdicts.set(albumId, verdict);
+      }
+      ripCache = { signature, verdicts };
+    }
+    return ripCache.verdicts;
+  };
+  const summarize = (row: Row) => toAlbumSummary(row, ripVerdicts().get(Number(row.id)) ?? null);
 
   /** Track ids matching free text, as an SQL fragment, or null for "no match possible". */
   const ftsTrackIds = (q: string) => {
@@ -203,7 +239,7 @@ export function createCatalogQueries(sqlite: Database.Database): CatalogQueries 
        ORDER BY ${orderBy}, a.id
        LIMIT ? OFFSET ?`,
       [...filters.params, limit, offset],
-    ).map(toAlbumSummary);
+    ).map(summarize);
   }
 
   function countAlbums(filters: { where: string[]; params: Param[] }): number {
@@ -280,7 +316,7 @@ export function createCatalogQueries(sqlite: Database.Database): CatalogQueries 
     }
 
     return {
-      ...toAlbumSummary(row),
+      ...summarize(row),
       musicbrainzAlbumId: nullableString(row.musicbrainz_album_id),
       totalDiscs: nullableNumber(row.total_discs),
       totalBytes: Number(row.total_bytes ?? 0),
@@ -291,6 +327,17 @@ export function createCatalogQueries(sqlite: Database.Database): CatalogQueries 
         [id],
       ).map((g) => ({ id: Number(g.id), name: String(g.name) })),
       discs: discs as Disc[],
+      ripLogs: all('SELECT id, rel_path, text FROM rip_logs WHERE album_id = ? ORDER BY rel_path', [
+        id,
+      ]).map((r): RipLogSummary => {
+        const relPath = String(r.rel_path);
+        return {
+          id: Number(r.id),
+          label: relPath.split('/').at(-1) ?? relPath,
+          disc: logDisc(relPath),
+          ...parseRipLog(String(r.text)),
+        };
+      }),
       scans: all(
         `SELECT i.rel_path, w.id, w.width, w.height FROM album_images i
          JOIN artwork w ON w.id = i.artwork_id WHERE i.album_id = ?`,
@@ -583,6 +630,18 @@ export function createCatalogQueries(sqlite: Database.Database): CatalogQueries 
       const row = get(`${SCAN_SQL} ORDER BY id DESC LIMIT 1`);
       return row ? toScanRecord(row) : null;
     },
+    getRipLog: (id) => {
+      const row = get('SELECT id, album_id, rel_path, text FROM rip_logs WHERE id = ?', [id]);
+      if (!row) return null;
+      const relPath = String(row.rel_path);
+      return {
+        id: Number(row.id),
+        albumId: Number(row.album_id),
+        label: relPath.split('/').at(-1) ?? relPath,
+        text: String(row.text),
+      };
+    },
+    ripVerdicts,
     getArtwork: (id) => {
       const row = get('SELECT cache_file, mime FROM artwork WHERE id = ?', [id]);
       return row ? { cacheFile: String(row.cache_file), mime: String(row.mime) } : null;
@@ -590,7 +649,7 @@ export function createCatalogQueries(sqlite: Database.Database): CatalogQueries 
   };
 }
 
-function toAlbumSummary(row: Row): AlbumSummary {
+function toAlbumSummary(row: Row, rip: RipVerdict | null): AlbumSummary {
   const trackCount = Number(row.track_count ?? 0);
   const durationMs = Number(row.duration_ms ?? 0);
   return {
@@ -610,6 +669,7 @@ function toAlbumSummary(row: Row): AlbumSummary {
     lossless: Number(row.all_lossless ?? 0) === 1,
     kind: trackCount >= RELEASE_MIN_TRACKS || durationMs >= RELEASE_MIN_MS ? 'release' : 'loose',
     edition: typeof row.sample_path === 'string' ? editionFromPath(row.sample_path) : [],
+    rip,
   };
 }
 

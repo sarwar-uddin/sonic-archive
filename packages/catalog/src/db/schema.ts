@@ -259,3 +259,24 @@ export const albumImages = sqliteTable(
     index('album_images_artwork_idx').on(t.artworkId),
   ],
 );
+
+/**
+ * Rip logs found in an album's folder (EAC/XLD .log, CUETools .accurip),
+ * decoded to text. They are parsed when read (src/metadata/rip-log.ts), so
+ * better parsing rules apply without rescanning, and the full log can be shown.
+ */
+export const ripLogs = sqliteTable(
+  'rip_logs',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    albumId: integer('album_id')
+      .notNull()
+      .references(() => albums.id, { onDelete: 'cascade' }),
+    /** Source file, relative to the library root. Informational only. */
+    relPath: text('rel_path').notNull(),
+    sourceSize: integer('source_size').notNull(),
+    sourceMtimeMs: integer('source_mtime_ms').notNull(),
+    text: text('text').notNull(),
+  },
+  (t) => [uniqueIndex('rip_logs_album_path_unique').on(t.albumId, t.relPath)],
+);

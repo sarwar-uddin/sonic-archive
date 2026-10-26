@@ -1,5 +1,6 @@
 import type { HealthReport, HealthTrackRef, ReportSection } from '@sonic-archive/contracts';
 import type Database from 'better-sqlite3';
+import { albumRipVerdict, parseRipLog, type RipLogReport } from '../metadata/rip-log.ts';
 import {
   albumMetadataIssues,
   probableDuplicates,
@@ -124,7 +125,31 @@ export function buildHealthReport(sqlite: Database.Database): HealthReport {
     ]),
   );
 
+  // Rip logs: albums whose logs, taken together, are not clean.
+  const logsByAlbum = new Map<number, { relPath: string; report: RipLogReport }[]>();
+  for (const row of all('SELECT album_id, rel_path, text FROM rip_logs ORDER BY rel_path')) {
+    const list = logsByAlbum.get(Number(row.album_id)) ?? [];
+    list.push({ relPath: String(row.rel_path), report: parseRipLog(String(row.text)) });
+    logsByAlbum.set(Number(row.album_id), list);
+  }
+  const ripChecks = [...logsByAlbum]
+    .map(([albumId, logs]) => ({
+      albumId,
+      logs,
+      verdict: albumRipVerdict(
+        logs.map((l) => ({ relPath: l.relPath, verdict: l.report.verdict })),
+      ),
+    }))
+    .filter((a) => a.verdict === 'problems' || a.verdict === 'differs')
+    .sort((a, b) => byAlbumTitle(a.albumId, b.albumId))
+    .map((a) => ({
+      album: albumRef(a.albumId),
+      verdict: a.verdict as 'problems' | 'differs',
+      notes: a.logs.flatMap((l) => ripNotes(l.relPath, l.report)),
+    }));
+
   return {
+    ripChecks: section(ripChecks),
     missingFiles: section(
       missing.map((r) => ({
         relPath: String(r.rel_path),
@@ -162,6 +187,23 @@ export function buildHealthReport(sqlite: Database.Database): HealthReport {
         .map((id) => ({ album: albumRef(id), folders: split.get(id) ?? [] })),
     ),
   };
+}
+
+/** What is off in one log, as short sentences; empty when nothing is. */
+function ripNotes(relPath: string, r: RipLogReport): string[] {
+  const name = relPath.split('/').at(-1) ?? relPath;
+  const notes: string[] = [];
+  if (r.readProblems > 0) notes.push(`${name}: ${r.readProblems} read problem(s) reported`);
+  if (r.crcMismatches > 0) notes.push(`${name}: test and copy CRCs differ on ${r.crcMismatches}`);
+  const ar = r.accurateRip;
+  if (ar && ar.inaccurate > 0) {
+    const total = ar.accurate + ar.inaccurate + ar.notInDatabase;
+    const verb = ar.inaccurate === 1 ? 'differs' : 'differ';
+    notes.push(
+      `${name}: ${ar.inaccurate} of ${total} track${total === 1 ? '' : 's'} ${verb} from AccurateRip`,
+    );
+  }
+  return notes;
 }
 
 function section<T>(items: T[]): ReportSection<T> {

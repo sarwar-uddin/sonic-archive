@@ -60,7 +60,7 @@ All endpoints are `GET`, return JSON, and address resources by numeric id.
 
 ## Status
 
-Milestones **M0–M8** are complete, plus a collection-led redesign: the
+Milestones **M0–M9** are complete, plus a collection-led redesign: the
 library has been scanned in full (read-only; verified unchanged afterwards).
 Covers come from folder scans (JPEG/PNG/TIFF) and are served as WebP
 thumbnails. Single-file CD images are split into their tracks by their CUE
@@ -70,5 +70,9 @@ sheets, and the discs of a set join into one album
 Each album page shows the scanned sleeve, booklet, discs and OBI from its
 folder, with a full-screen viewer for reading liner notes.
 
-Next: rip verification from EAC/XLD logs, grouping pressings of one album, a search
+Rip logs (EAC in English, Russian or Spanish, XLD, CUETools) are read for
+AccurateRip and CUETools-database results, read errors and CRC checks; each
+album gets a verdict, and the full log can be read in the app.
+
+Next: grouping pressings of one album, a search
 palette, and a statistics page.

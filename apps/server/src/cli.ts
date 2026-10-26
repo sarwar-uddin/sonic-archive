@@ -184,6 +184,7 @@ function printSummary(s: ScanSummary): void {
     `restored   ${c.restored}`,
     `missing    ${s.swept ? c.missing : '(not checked)'}`,
     `errors     ${c.errors}`,
+    `rip logs   ${s.images.ripLogs}`,
     `scans      ${s.images.rendered + s.images.unchanged} artwork images (${s.images.rendered} new or changed${s.images.failed > 0 ? `, ${s.images.failed} skipped` : ''})`,
   ];
   if (s.reason) lines.push('', s.reason);

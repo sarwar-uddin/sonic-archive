@@ -8,6 +8,7 @@ import {
   artwork,
   type CREDIT_ROLES,
   genres,
+  ripLogs,
   trackArtists,
   trackGenres,
   tracks,
@@ -307,4 +308,54 @@ export function getArtworkCacheFile(db: CatalogExecutor, artworkId: number): str
     .from(artwork)
     .where(eq(artwork.id, artworkId))
     .get()?.cacheFile;
+}
+
+export type RipLogRow = Omit<typeof ripLogs.$inferSelect, 'id' | 'albumId'>;
+
+/** The rip logs recorded for an album, without their text. */
+export function getRipLogSources(db: CatalogExecutor, albumId: number): Omit<RipLogRow, 'text'>[] {
+  return db
+    .select({
+      relPath: ripLogs.relPath,
+      sourceSize: ripLogs.sourceSize,
+      sourceMtimeMs: ripLogs.sourceMtimeMs,
+    })
+    .from(ripLogs)
+    .where(eq(ripLogs.albumId, albumId))
+    .all();
+}
+
+/**
+ * Makes an album's rip logs exactly those listed: `logs` are added or
+ * replaced, `keep` (unchanged files) are left as they are, and any other
+ * rows are dropped.
+ */
+export function setRipLogs(
+  db: CatalogExecutor,
+  albumId: number,
+  logs: readonly RipLogRow[],
+  keep: readonly string[],
+): void {
+  db.transaction((tx) => {
+    const existing = new Map(
+      tx
+        .select({ id: ripLogs.id, relPath: ripLogs.relPath })
+        .from(ripLogs)
+        .where(eq(ripLogs.albumId, albumId))
+        .all()
+        .map((r) => [r.relPath, r.id]),
+    );
+    for (const log of logs) {
+      const id = existing.get(log.relPath);
+      if (id === undefined)
+        tx.insert(ripLogs)
+          .values({ ...log, albumId })
+          .run();
+      else tx.update(ripLogs).set(log).where(eq(ripLogs.id, id)).run();
+      existing.delete(log.relPath);
+    }
+    for (const relPath of keep) existing.delete(relPath);
+    const stale = [...existing.values()];
+    if (stale.length > 0) tx.delete(ripLogs).where(inArray(ripLogs.id, stale)).run();
+  });
 }

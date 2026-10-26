@@ -21,6 +21,7 @@
   --accent-dim: rgb(226 65 46 / 0.16);
   --obi: #efe9dc;
   --warn: #e0a841;
+  --verified: #7fc48a;
 
   --font-sans: "Archivo Variable", "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
@@ -138,6 +139,12 @@ img {
 .tag-hires {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+/* A rip that matched AccurateRip or the CUETools database. */
+.tag-verified {
+  border-color: var(--verified);
+  color: var(--verified);
 }
 
 .visually-hidden {

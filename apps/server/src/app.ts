@@ -86,6 +86,10 @@ export function createApp(deps: AppDeps): express.Express {
     res.json(found(queries.getAlbum(parse(idParams, req.params).id)));
   });
 
+  api.get('/rip-logs/:id', (req, res) => {
+    res.json(found(queries.getRipLog(parse(idParams, req.params).id)));
+  });
+
   api.get('/tracks', (req, res) => {
     res.json(queries.listTracks(parse(trackListQuery, req.query)));
   });

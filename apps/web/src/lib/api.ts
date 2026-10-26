@@ -12,6 +12,7 @@ import type {
   Health,
   HealthReport,
   Page,
+  RipLogText,
   ScanRecord,
   SearchResults,
   Stats,
@@ -82,4 +83,6 @@ export const api = {
   search: (q: string, signal?: AbortSignal) => get<SearchResults>('search', { q }, signal),
   scans: (signal?: AbortSignal) => get<ScanRecord[]>('scans', { limit: 20 }, signal),
   healthReport: (signal?: AbortSignal) => get<HealthReport>('health-report', undefined, signal),
+  ripLog: (id: number, signal?: AbortSignal) =>
+    get<RipLogText>(`rip-logs/${id}`, undefined, signal),
 };

@@ -77,22 +77,27 @@ export interface LibraryReader {
   /** Reads an image file, or returns null if it is larger than `maxBytes`. */
   readImage(relPath: string, maxBytes: number): Promise<Uint8Array | null>;
   /**
-   * Image files under `relDir`, down to `maxDepth` folder levels, entering a
-   * subfolder only if `descend(relSubdir, name, siblingFolderNames)` agrees.
-   * Stops after `limit` images. Lists and stats only; reads no image data.
+   * Files with one of `extensions` under `relDir`, down to `maxDepth` folder
+   * levels, entering a subfolder only if `descend(relSubdir, name,
+   * siblingFolderNames)` agrees. Stops after `limit` files. Lists and stats
+   * only; reads no file contents.
    */
-  listImages(relDir: string, options: ListImagesOptions): Promise<ImageEntry[]>;
+  listFiles(relDir: string, options: ListFilesOptions): Promise<FileEntry[]>;
+  /** Reads a small text file (a rip log), or returns null if larger than `maxBytes`. */
+  readSmallFile(relPath: string, maxBytes: number): Promise<Uint8Array | null>;
   /** Every CUE sheet in `relDir`, parsed, in name order. */
   readCueSheets(relDir: string): Promise<NamedCueSheet[]>;
 }
 
-export interface ImageEntry {
+export interface FileEntry {
   readonly relPath: string;
   readonly size: number;
   readonly mtimeMs: number;
 }
 
-export interface ListImagesOptions {
+export interface ListFilesOptions {
+  /** Lowercase, with the dot: ".jpg". */
+  readonly extensions: ReadonlySet<string>;
   readonly maxDepth: number;
   readonly limit: number;
   readonly descend: (relSubdir: string, name: string, siblings: readonly string[]) => boolean;
@@ -216,8 +221,8 @@ export function createLibraryReader(root: string): LibraryReader {
     return readHeader(absolute, st.size);
   }
 
-  async function listImages(relDir: string, options: ListImagesOptions): Promise<ImageEntry[]> {
-    const found: ImageEntry[] = [];
+  async function listFiles(relDir: string, options: ListFilesOptions): Promise<FileEntry[]> {
+    const found: FileEntry[] = [];
     const visit = async (dir: string, depth: number): Promise<void> => {
       const entries = await readSortedDir(resolveInsideRoot(canonicalRoot, dir));
       const subdirs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
@@ -226,7 +231,7 @@ export function createLibraryReader(root: string): LibraryReader {
         if (entry.name.startsWith('.')) continue;
         const relPath = path.join(dir, entry.name);
         // Dirent types do not follow symlinks, so a link is neither of these.
-        if (entry.isFile() && IMAGE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
+        if (entry.isFile() && options.extensions.has(path.extname(entry.name).toLowerCase())) {
           const st = await fs.promises.lstat(path.join(canonicalRoot, relPath));
           found.push({ relPath, size: st.size, mtimeMs: Math.floor(st.mtimeMs) });
         } else if (
@@ -267,7 +272,8 @@ export function createLibraryReader(root: string): LibraryReader {
     readAudio,
     findFolderArtwork,
     readImage,
-    listImages,
+    listFiles,
+    readSmallFile: readImage,
     readCueSheets,
   };
 }

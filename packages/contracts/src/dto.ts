@@ -32,6 +32,50 @@ export interface AlbumSummary {
   readonly kind: 'release' | 'loose';
   /** Pressing details from the folder name, e.g. ["1991 Japan TECP-23893 Teichiku"]. */
   readonly edition: readonly string[];
+  /** What the album's rip logs say, worst disc first; null without logs. */
+  readonly rip: RipVerdict | null;
+}
+
+/**
+ * How trustworthy a rip is, from its EAC/XLD/CUETools log:
+ * `verified` matched AccurateRip or the CUETools database; `clean` was
+ * ripped securely without errors but had nothing to compare against;
+ * `differs` had no errors but other checksums in AccurateRip (usually another
+ * pressing); `problems` reported read errors or CRC mismatches.
+ */
+export type RipVerdict = 'verified' | 'clean' | 'differs' | 'problems' | 'unknown';
+
+export interface RipLogSummary {
+  readonly id: number;
+  /** File name of the log. */
+  readonly label: string;
+  /** The disc folder it belongs to ("CD2"), or null for the whole album. */
+  readonly disc: string | null;
+  readonly tool: 'EAC' | 'XLD' | 'CUETools' | 'other';
+  readonly toolVersion: string | null;
+  readonly drive: string | null;
+  readonly readMode: string | null;
+  readonly secureMode: boolean | null;
+  readonly readOffset: number | null;
+  readonly crcChecks: number;
+  readonly crcMismatches: number;
+  readonly readProblems: number;
+  readonly accurateRip: {
+    readonly accurate: number;
+    readonly inaccurate: number;
+    readonly notInDatabase: number;
+    readonly minConfidence: number | null;
+  } | null;
+  readonly ctdb: { readonly tracks: number; readonly accurate: number } | null;
+  readonly hasChecksum: boolean;
+  readonly verdict: RipVerdict;
+}
+
+export interface RipLogText {
+  readonly id: number;
+  readonly albumId: number;
+  readonly label: string;
+  readonly text: string;
 }
 
 export interface TrackSummary {
@@ -110,6 +154,7 @@ export interface AlbumDetail extends AlbumSummary {
   readonly discs: readonly Disc[];
   /** Scanned artwork in viewing order; empty when the folder has none. */
   readonly scans: readonly AlbumScan[];
+  readonly ripLogs: readonly RipLogSummary[];
 }
 
 export interface ArtistSummary extends ArtistRef {
@@ -242,5 +287,12 @@ export interface HealthReport {
   readonly splitAlbums: ReportSection<{
     readonly album: { readonly id: number; readonly title: string; readonly artist: string | null };
     readonly folders: readonly string[];
+  }>;
+  /** Albums whose rip logs report problems or disagree with AccurateRip. */
+  readonly ripChecks: ReportSection<{
+    readonly album: { readonly id: number; readonly title: string; readonly artist: string | null };
+    readonly verdict: RipVerdict;
+    /** One line per log that says something is off. */
+    readonly notes: readonly string[];
   }>;
 }

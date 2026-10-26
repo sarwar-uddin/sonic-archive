@@ -124,6 +124,11 @@ export function AlbumCard({
       <p className={styles.meta}>
         <span className="mono">{album.year ?? '—'}</span>
         <SpecTag album={album} />
+        {album.rip === 'verified' && (
+          <span className="tag tag-verified" title="Rip verified by AccurateRip or CTDB">
+            AR ✓
+          </span>
+        )}
       </p>
       {edition && (
         <p className={`mono ${styles.edition}`} title={edition}>

@@ -63,7 +63,7 @@ describe('openCatalogDatabase (read-only)', () => {
 describe('migrateCatalog', () => {
   it('creates the schema on a fresh database without a pointless backup', () => {
     const result = migrateCatalog(database);
-    expect(result).toEqual({ applied: 4, backupFile: null });
+    expect(result).toEqual({ applied: 5, backupFile: null });
     expect(tableNames(database.sqlite)).toEqual([
       'album_images',
       'albums',
@@ -72,6 +72,7 @@ describe('migrateCatalog', () => {
       'files',
       'genres',
       'library_roots',
+      'rip_logs',
       'scans',
       'track_artists',
       'track_genres',

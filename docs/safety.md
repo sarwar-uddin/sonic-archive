@@ -34,6 +34,11 @@ reads only the cache, never the library. A scan folder is searched only if it
 holds no audio of its own (or is a disc folder), so one album never picks up
 another album's images.
 
+Rip logs (EAC/XLD `.log`, CUETools `.accurip`; M9) are read the same way,
+capped at 2 MB, decoded to text and stored in the catalog database, so the
+app can show them without reading the library again. Only files that parse
+as rip logs are kept.
+
 ## Configuring the library (do this only at milestone M2.5)
 
 ```jsonc
