@@ -40,11 +40,11 @@ new folder; the cover cache is kept.
 ## Artwork
 
 Covers come from image files in the album folder (`cover`, `folder`, `front`,
-… in JPG/PNG/WebP/GIF, also inside `Artwork/` or `Scans/`), falling back to
-embedded pictures. They are read through the same read-only reader (capped at
-20 MB) and copied to the cache dir, never written to the library, named by
-SHA-256. The image type is detected from the bytes; only JPEG, PNG, GIF and
-WebP are kept, so a tag or a file can never smuggle SVG or HTML into what the
+… in JPG/PNG/WebP/GIF/TIFF, also inside `Artwork/` or `Scans/`), falling
+back to embedded pictures. They are read through the same read-only reader
+(capped at 64 MB, as uncompressed TIFF scans run large) and copied to the
+cache dir, never written to the library, named by SHA-256. The image type is
+detected from the bytes; only JPEG, PNG, GIF, WebP and TIFF are kept, so a tag or a file can never smuggle SVG or HTML into what the
 app will later serve.
 
 Scanned artwork (booklet pages, back covers, discs; M8) is read the same way
@@ -80,16 +80,16 @@ M13 only the scanner did. The same rules hold:
 
 ## Dynamic range analysis (M15)
 
-`pnpm analyze --confirm` (and `start:watch` after each scan) decodes audio
+`pnpm analyze --confirm` (and the app, after each scan) decodes audio
 to measure dynamic range. ffmpeg is spawned the same way as for playback
 (`apps/server/src/analyze.ts`): no shell, one `file:` input validated by the
 library reader, raw samples to `pipe:1`, nothing written to disk. Results go
 to the `track_dynamics` table, stamped with each file's size and mtime.
 
-## Automatic updates (M14, opt-in)
+## Automatic updates (M14; on by default since M16)
 
-`pnpm start:watch` starts the server with a watcher on the configured root
-(the user asked for this; plain `pnpm start` never scans). The watcher only
+While the app runs with watching on (Settings; on by default), the server
+watches the chosen music folder. The watcher only
 lists folders and asks the OS for change notices: one watch per folder,
 symlinks never followed, hidden folders skipped. Changes are batched (4 s of
 quiet) into the same incremental scan as `pnpm scan --confirm`, so unchanged
@@ -97,18 +97,19 @@ files are not read and the missing-file safeguards apply. The scan writes
 through its own database connection; request handlers stay read-only.
 Reading files does not trigger change notices, so scans do not loop.
 
-## Configuring the library (do this only at milestone M2.5)
+## Scanning from the command line
 
-```jsonc
-// ~/.config/sonic-archive/config.json
-{ "libraryRoot": "/absolute/path/to/Music" }
-```
+The CLI uses the same music folder as the app (config.json or
+`SONIC_LIBRARY_ROOT`) and refuses to read anything without `--confirm`:
 
 ```sh
 pnpm scan                                     # shows the plan; reads nothing
 pnpm scan --confirm --dry-run                 # lists and compares; reads no contents
-pnpm scan --confirm --subpath "Artist/Album"  # sample scan of one folder
+pnpm scan --confirm --subpath "Artist/Album"  # scan one folder only
+pnpm scan --confirm                           # incremental scan of everything
+pnpm analyze --confirm                        # measure dynamic range
 ```
 
-The first real scan is limited to one or two album folders that you choose
-(`--subpath`). A full scan happens only after you approve those results.
+When trying the app on an irreplaceable collection for the first time, a
+`--subpath` scan of one or two albums is a cheap way to check the results
+before scanning everything.
