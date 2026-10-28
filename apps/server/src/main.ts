@@ -11,6 +11,7 @@ import {
 import { createApp } from './app.ts';
 import { renderScanCopy } from './artwork.ts';
 import { createTranscoder } from './audio.ts';
+import { FFMPEG_MISSING, findFfmpeg } from './ffmpeg.ts';
 import { createLibraryService } from './library-service.ts';
 
 /** Never configurable: the server only ever listens on loopback (docs/safety.md, #6). */
@@ -31,6 +32,10 @@ if (applied > 0)
   console.log(`applied ${applied} migration(s)${backupFile ? `; backup ${backupFile}` : ''}`);
 const database = openCatalogDatabase(dirs.dataDir, { readonly: true });
 
+// ffmpeg is optional: without it, dynamic range and converted playback are off.
+const ffmpeg = await findFfmpeg();
+if (!ffmpeg) console.log(FFMPEG_MISSING);
+
 // The music folder: chosen in the app (or config.json / SONIC_LIBRARY_ROOT),
 // scanned when the app starts and, if watching is on, whenever it changes.
 const libraryService = createLibraryService({
@@ -41,7 +46,7 @@ const libraryService = createLibraryService({
   settings,
   database: writer,
   renderScan: renderScanCopy,
-  analyze: true,
+  analyze: ffmpeg,
 });
 
 const app = createApp({
@@ -50,7 +55,7 @@ const app = createApp({
   artworkDir: path.join(dirs.cacheDir, ARTWORK_SUBDIR),
   library: libraryService,
   homeDir,
-  transcoder: createTranscoder(),
+  ...(ffmpeg && { transcoder: createTranscoder() }),
   ...(webDist !== undefined && { webDist: path.resolve(webDist) }),
 });
 

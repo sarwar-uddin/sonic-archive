@@ -109,6 +109,20 @@ describe('player', () => {
     expect(player.getState().index).toBe(2);
   });
 
+  it('stops and says so when a track cannot be played, and tries again on the next play', () => {
+    const { audio, player } = setup();
+    player.play([item({ fileId: 12, playback: 'transcode' }), item({ fileId: 13 })], 0);
+    audio.dispatchEvent(new Event('error'));
+    expect(player.getState()).toMatchObject({ index: 0, playing: false, failed: true });
+
+    audio.src = '';
+    player.toggle();
+    expect(player.getState()).toMatchObject({ playing: true, failed: false });
+    expect(audio.src).toBe('/api/files/12/audio');
+    player.next();
+    expect(player.getState()).toMatchObject({ index: 1, playing: true, failed: false });
+  });
+
   it('pauses and resumes, and sets the volume', () => {
     const { audio, player } = setup();
     player.play(image, 0);

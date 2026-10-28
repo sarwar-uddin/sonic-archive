@@ -116,6 +116,7 @@ export function createApp(deps: AppDeps): express.Express {
         configured: deps.library.status().root !== null,
         available: isDirectory(deps.library.status().root),
       },
+      transcoding: deps.transcoder !== undefined,
       lastScan: queries.lastScan(),
     };
     res.json(body);
@@ -158,7 +159,17 @@ export function createApp(deps: AppDeps): express.Express {
     res.setHeader('Cache-Control', 'no-store');
 
     if (file.playback.mode === 'transcode') {
-      const stream = deps.transcoder?.stream(absolute, start ?? 0, file.codec) ?? null;
+      if (!deps.transcoder) {
+        const body: ApiError = {
+          error: {
+            code: 'UNAVAILABLE',
+            message: `Playing ${file.codec ?? 'this format'} needs ffmpeg, which is not installed.`,
+          },
+        };
+        res.status(503).json(body);
+        return;
+      }
+      const stream = deps.transcoder.stream(absolute, start ?? 0, file.codec);
       if (stream === null) {
         res.status(503).json({ error: { code: 'BUSY', message: 'Too many conversions at once.' } });
         return;

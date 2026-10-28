@@ -32,6 +32,8 @@ export interface PlayerState {
   /** Position within the current track. */
   readonly positionMs: number;
   readonly volume: number;
+  /** The current track could not be loaded or decoded. */
+  readonly failed: boolean;
 }
 
 export function toQueueItem(
@@ -73,7 +75,14 @@ export interface Player {
 }
 
 export function createPlayer(audio: HTMLAudioElement): Player {
-  let state: PlayerState = { queue: [], index: 0, playing: false, positionMs: 0, volume: 1 };
+  let state: PlayerState = {
+    queue: [],
+    index: 0,
+    playing: false,
+    positionMs: 0,
+    volume: 1,
+    failed: false,
+  };
   const listeners = new Set<() => void>();
   // Where the loaded stream starts within its file, in seconds: 0 for a
   // file sent as stored; the requested start for a converted stream.
@@ -95,6 +104,11 @@ export function createPlayer(audio: HTMLAudioElement): Player {
   /** Loads `item` at `atMs` into the track, reusing the open file when possible. */
   const load = (item: QueueItem, atMs: number) => {
     const targetSeconds = (item.startMs + atMs) / 1000;
+    if (state.failed) {
+      // Try the file afresh: the element keeps its error until a new load.
+      set({ failed: false });
+      loadedFile = null;
+    }
     if (item.playback === 'direct') {
       if (loadedFile !== item.fileId) {
         audio.src = audioUrl(item.fileId);
@@ -152,6 +166,13 @@ export function createPlayer(audio: HTMLAudioElement): Player {
   });
   audio.addEventListener('pause', () => set({ playing: false }));
   audio.addEventListener('ended', advance);
+  // A stream that cannot be fetched or decoded (a converted format without
+  // ffmpeg, a damaged file): stop here and say so, rather than skip ahead.
+  audio.addEventListener('error', () => {
+    if (!audio.src) return;
+    cancelAnimationFrame(frame);
+    set({ playing: false, failed: true });
+  });
 
   function updateMediaSession(item: QueueItem) {
     if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
@@ -183,8 +204,10 @@ export function createPlayer(audio: HTMLAudioElement): Player {
       load(item, 0);
     },
     toggle() {
-      if (!current()) return;
-      if (audio.paused) start();
+      const item = current();
+      if (!item) return;
+      if (state.failed) load(item, state.positionMs);
+      else if (audio.paused) start();
       else audio.pause();
     },
     next() {

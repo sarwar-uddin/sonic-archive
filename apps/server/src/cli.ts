@@ -15,6 +15,7 @@ import {
 } from '@sonic-archive/catalog';
 import { analyzeLibrary } from './analyze.ts';
 import { renderScanCopy } from './artwork.ts';
+import { findFfmpeg } from './ffmpeg.ts';
 
 const USAGE = `Usage: sonic-archive <command> [options]
 
@@ -189,6 +190,10 @@ async function analyze(args: string[]): Promise<number> {
     return EXIT.usage;
   }
   console.log(plan);
+  if (!(await findFfmpeg())) {
+    console.error('\nffmpeg not found on PATH: measuring dynamic range needs it.');
+    return EXIT.config;
+  }
   const database = openCatalogDatabase(dirs.dataDir);
   const controller = new AbortController();
   const onSigint = () => {
@@ -212,6 +217,10 @@ async function analyze(args: string[]): Promise<number> {
     console.log(
       `\nanalyzed   ${summary.files} files, ${summary.tracks} tracks in ${Math.round((Date.now() - started) / 1000)} s`,
     );
+    if (summary.ffmpegMissing) {
+      console.error('ffmpeg could not be started, so measuring stopped.');
+      return EXIT.failed;
+    }
     if (summary.failed.length > 0) {
       console.log(`failed     ${summary.failed.length}`);
       for (const f of summary.failed.slice(0, 20)) console.log(`  ${f.relPath}: ${f.message}`);

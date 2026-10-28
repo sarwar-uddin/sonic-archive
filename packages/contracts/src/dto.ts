@@ -237,6 +237,8 @@ export interface ScanRecord {
 export interface Health {
   readonly status: 'ok';
   readonly library: { readonly configured: boolean; readonly available: boolean };
+  /** Whether formats browsers cannot play are converted (needs ffmpeg). */
+  readonly transcoding: boolean;
   readonly lastScan: ScanRecord | null;
 }
 
@@ -256,6 +258,7 @@ export interface ApiError {
       | 'UNSUPPORTED_MEDIA_TYPE'
       | 'INVALID_FOLDER'
       | 'BUSY'
+      | 'UNAVAILABLE'
       | 'INTERNAL';
     readonly message: string;
     readonly issues?: readonly { readonly path: string; readonly message: string }[];

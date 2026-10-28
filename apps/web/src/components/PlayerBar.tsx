@@ -1,4 +1,6 @@
+import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
+import { api } from '../lib/api.ts';
 import { formatDuration } from '../lib/format.ts';
 import { usePlayer } from '../lib/use-player.tsx';
 import { Cover } from './Cover.tsx';
@@ -7,6 +9,7 @@ import styles from './PlayerBar.module.css';
 /** Shown once something has been played: what is on, and the transport. */
 export function PlayerBar() {
   const [state, player] = usePlayer();
+  const health = useQuery({ queryKey: ['health'], queryFn: ({ signal }) => api.health(signal) });
   const item = state.queue[state.index];
   if (!item) return null;
   const length = item.durationMs ?? 0;
@@ -33,6 +36,13 @@ export function PlayerBar() {
               </>
             )}
           </span>
+          {state.failed && (
+            <span className={styles.error} role="alert">
+              {item.playback === 'transcode' && health.data?.transcoding === false
+                ? 'This format needs ffmpeg to play. Install it and restart Sonic Archive.'
+                : 'This track could not be played.'}
+            </span>
+          )}
         </span>
       </div>
 

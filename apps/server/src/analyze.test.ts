@@ -97,7 +97,17 @@ describe('analyzeLibrary (with ffmpeg)', () => {
     for (const r of ember) expect(r.dr_exact).toBeCloseTo(0, 0);
 
     const again = await analyzeLibrary({ db: catalog.database.db, reader });
-    expect(again).toEqual({ files: 0, tracks: 0, failed: [] });
+    expect(again).toEqual({ files: 0, tracks: 0, failed: [], ffmpegMissing: false });
+  });
+
+  it('stops, without failing every file or crashing, when ffmpeg is missing', async () => {
+    const summary = await analyzeLibrary({
+      db: catalog.database.db,
+      reader: createLibraryReader(lib.root),
+      command: path.join(lib.outside, 'no-ffmpeg-here'),
+    });
+    expect(summary).toEqual({ files: 0, tracks: 0, failed: [], ffmpegMissing: true });
+    expect(rows()).toEqual([]);
   });
 
   it('measures a track again after its file changes', async () => {

@@ -13,6 +13,7 @@ import {
   type LibraryReader,
   saveDynamics,
 } from '@sonic-archive/catalog';
+import { isMissingCommand } from './ffmpeg.ts';
 
 /** DSD is decoded at 2.8 MHz and up; analysing it at 88.2 kHz loses nothing that DR sees. */
 export function decodeFormat(job: Pick<AnalysisJob, 'codec' | 'sampleRate' | 'channels'>) {
@@ -98,6 +99,13 @@ export async function analyzeFile(
     stdio: ['ignore', 'pipe', 'pipe'],
     shell: false,
   });
+  // Listen before reading: a failed spawn (no ffmpeg) emits 'error', which
+  // would otherwise be thrown as an uncaught exception.
+  const exited = new Promise<number | null>((resolve, reject) => {
+    child.once('error', reject);
+    child.once('close', resolve);
+  });
+  exited.catch(() => {});
   const frameBytes = 4 * channels;
   let rest: Buffer = Buffer.alloc(0);
   let stderr = '';
@@ -113,10 +121,7 @@ export async function analyzeFile(
     meters.push(samples);
     rest = data.subarray(usable);
   }
-  const code = await new Promise<number | null>((resolve) => {
-    if (child.exitCode !== null) resolve(child.exitCode);
-    else child.once('close', resolve);
-  });
+  const code = await exited;
   if (code !== 0) throw new Error(stderr.trim().split('\n').at(-1) || `ffmpeg exited with ${code}`);
   return meters.results();
 }
@@ -125,6 +130,8 @@ export interface AnalyzeSummary {
   readonly files: number;
   readonly tracks: number;
   readonly failed: readonly { relPath: string; message: string }[];
+  /** ffmpeg could not be started, so the run stopped at the first file. */
+  readonly ffmpegMissing: boolean;
 }
 
 /** Measures every file whose tracks lack a current measurement. */
@@ -142,8 +149,9 @@ export async function analyzeLibrary(deps: {
   let next = 0;
   let done = 0;
   let tracks = 0;
+  let ffmpegMissing = false;
   const lane = async () => {
-    while (next < jobs.length && !deps.signal?.aborted) {
+    while (next < jobs.length && !deps.signal?.aborted && !ffmpegMissing) {
       const job = jobs[next++] as AnalysisJob;
       try {
         const { absolute } = await deps.reader.audioFile(job.relPath);
@@ -151,6 +159,11 @@ export async function analyzeLibrary(deps: {
         saveDynamics(deps.db, job, results);
         tracks += results.length;
       } catch (error) {
+        // Every other file would fail the same way: stop instead.
+        if (isMissingCommand(error)) {
+          ffmpegMissing = true;
+          return;
+        }
         failed.push({ relPath: job.relPath, message: (error as Error).message });
       }
       // Count first: `onProgress?.(++done)` would skip the increment when
@@ -160,5 +173,5 @@ export async function analyzeLibrary(deps: {
     }
   };
   await Promise.all(Array.from({ length: deps.concurrency ?? 3 }, lane));
-  return { files: done - failed.length, tracks, failed };
+  return { files: done - failed.length, tracks, failed, ffmpegMissing };
 }

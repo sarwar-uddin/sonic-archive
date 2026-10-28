@@ -154,6 +154,7 @@ describe('GET /api/health and /api/stats', () => {
     expect(body).toMatchObject({
       status: 'ok',
       library: { configured: true, available: true },
+      transcoding: true,
       lastScan: { status: 'completed', seen: 19, errors: 1 },
     });
   });
@@ -656,6 +657,26 @@ describe('GET /api/files/:id/audio', () => {
       }),
     });
     expect((await request(gone).get(`/api/files/${coda.id}/audio`)).status).toBe(404);
+  });
+
+  it('says why a converted format cannot play when there is no ffmpeg', async () => {
+    const noFfmpeg = createApp({
+      queries: createCatalogQueries(reader.sqlite),
+      healthReport: () => buildHealthReport(reader.sqlite),
+      artworkDir: path.join(cacheDir, ARTWORK_SUBDIR),
+      library: fixedLibrary(lib.root, createLibraryReader(lib.root)),
+    });
+    expect((await request(noFfmpeg).get('/api/health')).body.transcoding).toBe(false);
+    const coda = await fileOf('Coda');
+    const res = await request(noFfmpeg).get(`/api/files/${coda.id}/audio`);
+    expect(res.status).toBe(503);
+    expect(res.body.error).toEqual({
+      code: 'UNAVAILABLE',
+      message: 'Playing ALAC needs ffmpeg, which is not installed.',
+    });
+    // Files browsers play as stored still stream.
+    const polar = await fileOf('Polar Night');
+    expect((await request(noFfmpeg).get(`/api/files/${polar.id}/audio`)).status).toBe(200);
   });
 
   it('refuses unknown files and bad parameters', async () => {

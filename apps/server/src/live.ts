@@ -20,6 +20,7 @@ import {
   watchLibrary,
 } from '@sonic-archive/catalog';
 import { analyzeLibrary } from './analyze.ts';
+import { FFMPEG_MISSING } from './ffmpeg.ts';
 
 export type LiveState =
   | { readonly state: 'idle' }
@@ -81,7 +82,8 @@ export function startLiveLibrary(deps: LiveLibraryDeps): LiveLibrary {
           concurrency: 2,
           onProgress: (done, total) => setState({ state: 'analyzing', done, total }),
         });
-        if (analysis.files > 0 || analysis.failed.length > 0) {
+        if (analysis.ffmpegMissing) log(`dynamic range: skipped. ${FFMPEG_MISSING}`);
+        else if (analysis.files > 0 || analysis.failed.length > 0) {
           log(
             `dynamic range: ${analysis.tracks} tracks measured, ${analysis.failed.length} failed`,
           );
