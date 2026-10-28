@@ -1,5 +1,15 @@
 {
   "name": "sonic-archive",
+  "version": "0.1.0",
+  "description": "A local-first catalog for a lossless CD collection: covers, booklet scans, rip logs, pressings, dynamic range and gapless playback.",
+  "license": "MIT",
+  "author": "Sarwar Uddin",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sarwar-uddin/sonic-archive.git"
+  },
+  "homepage": "https://github.com/sarwar-uddin/sonic-archive#readme",
+  "bugs": "https://github.com/sarwar-uddin/sonic-archive/issues",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@12.15.0",
