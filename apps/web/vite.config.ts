@@ -10,9 +10,10 @@ export default defineConfig({
     host: '127.0.0.1',
     port: 5173,
     strictPort: true,
-    // changeOrigin rewrites Host to the API's own address, which its Host
-    // allowlist accepts.
-    proxy: { '/api': { target: API, changeOrigin: true } },
+    // Host is forwarded unchanged (127.0.0.1:5173): the API's Host allowlist
+    // checks only the hostname, and the write guard needs Host to match the
+    // page's Origin. changeOrigin would break every settings action.
+    proxy: { '/api': { target: API } },
   },
   preview: { host: '127.0.0.1', port: 4173, strictPort: true },
   build: { outDir: 'dist', sourcemap: true },

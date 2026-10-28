@@ -702,6 +702,17 @@ describe('changing things: write protection', () => {
     expect(changes).toContain('root /srv/music');
   });
 
+  it('accepts a change forwarded by the dev proxy, which keeps the page’s Host', async () => {
+    const res = await request(writable)
+      .put('/api/library')
+      .set('Host', '127.0.0.1:5173')
+      .set('Origin', 'http://127.0.0.1:5173')
+      .set('X-Sonic-Token', TOKEN)
+      .send({ path: '/srv/dev' });
+    expect(res.status).toBe(200);
+    expect(changes).toContain('root /srv/dev');
+  });
+
   it.each([
     ['no Origin', {}, 403],
     ['another site', { Origin: 'http://evil.example' }, 403],
