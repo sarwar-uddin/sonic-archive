@@ -20,5 +20,7 @@ coverage/
 
 # Editors and OS
 .DS_Store
+# …except the fixture the scanner must skip (test-fixtures/README.md).
+!test-fixtures/library/.DS_Store
 .vscode/
 .idea/
