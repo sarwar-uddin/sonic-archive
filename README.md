@@ -123,11 +123,11 @@ The **Health** page lists what it couldn't make sense of.
 
 ## Command line
 
-| Command                  | What it does                                                         |
-| ------------------------ | -------------------------------------------------------------------- |
-| `pnpm paths`             | Where config, the catalog and the cache live                         |
+| Command                  | What it does                                                                                           |
+| ------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `pnpm paths`             | Where config, the catalog and the cache live                                                           |
 | `pnpm scan`              | Shows what a scan would do; with `--confirm` scans (`--dry-run`, `--subpath "Artist/Album"`, `--full`) |
-| `pnpm analyze --confirm` | Measures dynamic range for tracks not yet measured                   |
+| `pnpm analyze --confirm` | Measures dynamic range for tracks not yet measured                                                     |
 
 ## Your data
 
@@ -146,13 +146,13 @@ of yours.
 
 Environment variables, all optional:
 
-| Variable             | Default                        |                                                     |
-| -------------------- | ------------------------------ | --------------------------------------------------- |
-| `SONIC_PORT`         | `4317`                         | Port for `pnpm start`                               |
-| `SONIC_LIBRARY_ROOT` | (chosen in the app)            | Fixes the music folder; the app can't change it     |
-| `SONIC_CONFIG_DIR`   | `$XDG_CONFIG_HOME/sonic-archive` | Config                                            |
-| `SONIC_DATA_DIR`     | `$XDG_DATA_HOME/sonic-archive` | Catalog                                             |
-| `SONIC_CACHE_DIR`    | `$XDG_CACHE_HOME/sonic-archive` | Cover and scan copies                              |
+| Variable             | Default                          |                                                 |
+| -------------------- | -------------------------------- | ----------------------------------------------- |
+| `SONIC_PORT`         | `4317`                           | Port for `pnpm start`                           |
+| `SONIC_LIBRARY_ROOT` | (chosen in the app)              | Fixes the music folder; the app can't change it |
+| `SONIC_CONFIG_DIR`   | `$XDG_CONFIG_HOME/sonic-archive` | Config                                          |
+| `SONIC_DATA_DIR`     | `$XDG_DATA_HOME/sonic-archive`   | Catalog                                         |
+| `SONIC_CACHE_DIR`    | `$XDG_CACHE_HOME/sonic-archive`  | Cover and scan copies                           |
 
 ## Development
 
