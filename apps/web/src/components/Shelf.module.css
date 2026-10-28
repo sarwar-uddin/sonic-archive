@@ -76,7 +76,16 @@
   line-height: 1;
 }
 
+.text strong,
+.text span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The artist stays whole when it can; the title gives way, with an ellipsis. */
 .text strong {
+  flex: none;
+  max-inline-size: 100%;
   font-stretch: 80%;
   font-weight: 800;
   text-transform: uppercase;
@@ -84,6 +93,8 @@
 }
 
 .text span {
+  min-inline-size: 0;
+  font-stretch: 85%;
   opacity: 0.85;
 }
 

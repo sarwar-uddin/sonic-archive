@@ -49,6 +49,21 @@ export function Shelf({
   );
 }
 
+/**
+ * The title to print after the artist on a spine or OBI strip, or null for a
+ * self-titled album ("BLACK SABBATH", not "BLACK SABBATH Black Sabbath").
+ */
+export function spineTitle(artist: string | null, title: string): string | null {
+  const key = (s: string) =>
+    s
+      .normalize('NFD')
+      .replace(/\p{M}/gu, '')
+      .toLocaleLowerCase()
+      .replace(/^the\s+/, '')
+      .replace(/[^\p{L}\p{N}]+/gu, '');
+  return artist !== null && key(artist) === key(title) ? null : title;
+}
+
 /** The divider letter for an artist: "Ísold" → "I", "The Doors" → "D", "2Pac" → "#". */
 export function shelfLetter(artist: string | null): string {
   if (artist === null) return '?';
@@ -65,6 +80,7 @@ function Spine({ album }: { album: AlbumSummary }) {
   const artist = album.albumArtist?.name ?? null;
   const color = useCoverColor(album.artworkId, hue(album.title));
   const code = catalogueNumber(album.edition);
+  const title = spineTitle(artist, album.title);
   const double = album.durationMs > 82 * 60 * 1000;
   const label = [artist, album.title, album.year].filter(Boolean).join(' · ');
   return (
@@ -78,7 +94,7 @@ function Spine({ album }: { album: AlbumSummary }) {
         {album.obi && <span className={styles.obi} aria-hidden="true" />}
         <span className={styles.text} aria-hidden="true">
           {artist && <strong>{artist}</strong>}
-          <span>{album.title}</span>
+          {title && <span>{title}</span>}
         </span>
         <span className={`mono ${styles.foot}`} aria-hidden="true">
           {code ?? album.year ?? ''}

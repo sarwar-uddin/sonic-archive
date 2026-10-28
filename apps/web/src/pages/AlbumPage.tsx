@@ -6,6 +6,7 @@ import { Cover } from '../components/Cover.tsx';
 import { Pressings } from '../components/Pressings.tsx';
 import { RipLogs } from '../components/RipLogs.tsx';
 import { ScanShelf } from '../components/ScanViewer.tsx';
+import { spineTitle } from '../components/Shelf.tsx';
 import { ErrorMessage, Loading } from '../components/States.tsx';
 import { TrackList } from '../components/TrackList.tsx';
 import { api, artworkUrl } from '../lib/api.ts';
@@ -268,7 +269,7 @@ function Obi({
       <span className={styles.obiBand}>{format}</span>
       <span className={styles.obiText}>
         <strong>{artist ?? 'Unknown artist'}</strong>
-        <span>{title}</span>
+        {spineTitle(artist, title) && <span>{title}</span>}
       </span>
       <span className={`mono ${styles.obiFoot}`}>{year ?? '—'}</span>
     </div>

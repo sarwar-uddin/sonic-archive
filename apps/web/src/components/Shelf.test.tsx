@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { colorFromPixels } from '../lib/cover-color.ts';
-import { catalogueNumber, shelfLetter } from './Shelf.tsx';
+import { catalogueNumber, shelfLetter, spineTitle } from './Shelf.tsx';
 
 describe('catalogueNumber', () => {
   it.each([
@@ -11,6 +11,20 @@ describe('catalogueNumber', () => {
     [[], null],
   ])('%j → %s', (edition, expected) => {
     expect(catalogueNumber(edition)).toBe(expected);
+  });
+});
+
+describe('spineTitle', () => {
+  it.each([
+    ['Black Sabbath', 'Black Sabbath', null],
+    ['PORCUPINE TREE', 'Porcupine Tree', null],
+    ['The Doors', 'Doors', null],
+    ['Ísold', 'Isold!', null],
+    ['Black Sabbath', 'Paranoid', 'Paranoid'],
+    ['Metallica', 'Metallica (Remastered)', 'Metallica (Remastered)'],
+    [null, 'Untitled', 'Untitled'],
+  ])('%s / %s → %s', (artist, title, expected) => {
+    expect(spineTitle(artist, title)).toBe(expected);
   });
 });
 

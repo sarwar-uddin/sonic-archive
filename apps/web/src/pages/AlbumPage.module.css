@@ -87,11 +87,21 @@
   white-space: nowrap;
 }
 
+.obiText strong,
+.obiText span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* As on the shelf: the artist stays whole, the title gives way. */
 .obiText strong {
+  flex: none;
+  max-inline-size: 100%;
   font-weight: 900;
 }
 
 .obiText span {
+  min-inline-size: 0;
   font-weight: 500;
 }
 
